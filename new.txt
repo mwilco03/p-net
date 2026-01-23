@@ -1,0 +1,282 @@
+No.     Time           Source                Destination           DstPort Protocol Length Info
+     44 4.497471       PCSSystemtec_13:96:7e PROFIBUSNutz_00:00:00         PN-DCP   60     Ident Req, Xid:0xec8c7aca, All
+
+Frame 44: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface \Device\NPF_{E997D933-4799-400F-AE46-D50781CF4B7E}, id 0
+    Section number: 1
+    Interface id: 0 (\Device\NPF_{E997D933-4799-400F-AE46-D50781CF4B7E})
+    Encapsulation type: Ethernet (1)
+    Arrival Time: Jan 23, 2026 15:29:48.102130000 Eastern Standard Time
+    UTC Arrival Time: Jan 23, 2026 20:29:48.102130000 UTC
+    Epoch Arrival Time: 1769200188.102130000
+    [Time shift for this packet: 0.000000000 seconds]
+    [Time delta from previous captured frame: 0.007655000 seconds]
+    [Time delta from previous displayed frame: 0.000000000 seconds]
+    [Time since reference or first frame: 4.497471000 seconds]
+    Frame Number: 44
+    Frame Length: 60 bytes (480 bits)
+    Capture Length: 60 bytes (480 bits)
+    [Frame is marked: False]
+    [Frame is ignored: False]
+    [Protocols in frame: eth:ethertype:pn_rt:pn_dcp]
+    [Coloring Rule Name: Broadcast]
+    [Coloring Rule String: eth[0] & 1]
+Ethernet II, Src: PCSSystemtec_13:96:7e (08:00:27:13:96:7e), Dst: PROFIBUSNutz_00:00:00 (01:0e:cf:00:00:00)
+    Destination: PROFIBUSNutz_00:00:00 (01:0e:cf:00:00:00)
+        Address: PROFIBUSNutz_00:00:00 (01:0e:cf:00:00:00)
+        .... ..0. .... .... .... .... = LG bit: Globally unique address (factory default)
+        .... ...1 .... .... .... .... = IG bit: Group address (multicast/broadcast)
+    Source: PCSSystemtec_13:96:7e (08:00:27:13:96:7e)
+        Address: PCSSystemtec_13:96:7e (08:00:27:13:96:7e)
+        .... ..0. .... .... .... .... = LG bit: Globally unique address (factory default)
+        .... ...0 .... .... .... .... = IG bit: Individual address (unicast)
+    Type: PROFINET (0x8892)
+PROFINET acyclic Real-Time, ID:0xfefe, Len:  44
+PROFINET DCP, Ident Req, Xid:0xec8c7aca, All
+    ServiceID: Identify (5)
+    ServiceType: Request (0)
+    Xid: 0xec8c7aca
+    ResponseDelay: 1
+    DCPDataLength: 4
+    Block: All/All
+        Option: All Selector (255)
+        Suboption: ALL Selector (255)
+        DCPBlockLength: 0
+
+No.     Time           Source                Destination           DstPort Protocol Length Info
+     45 4.498684       RaspberryPiF_5f:4b:64 PCSSystemtec_13:96:7e         PN-DCP   136    Ident Ok , Xid:0xec8c7aca, IP, DeviceVendorValue, NameOfStation:"rtu-4b64", Dev-ID, Dev-Role, Dev-Options(14)
+
+Frame 45: 136 bytes on wire (1088 bits), 136 bytes captured (1088 bits) on interface \Device\NPF_{E997D933-4799-400F-AE46-D50781CF4B7E}, id 0
+    Section number: 1
+    Interface id: 0 (\Device\NPF_{E997D933-4799-400F-AE46-D50781CF4B7E})
+    Encapsulation type: Ethernet (1)
+    Arrival Time: Jan 23, 2026 15:29:48.103343000 Eastern Standard Time
+    UTC Arrival Time: Jan 23, 2026 20:29:48.103343000 UTC
+    Epoch Arrival Time: 1769200188.103343000
+    [Time shift for this packet: 0.000000000 seconds]
+    [Time delta from previous captured frame: 0.001213000 seconds]
+    [Time delta from previous displayed frame: 0.001213000 seconds]
+    [Time since reference or first frame: 4.498684000 seconds]
+    Frame Number: 45
+    Frame Length: 136 bytes (1088 bits)
+    Capture Length: 136 bytes (1088 bits)
+    [Frame is marked: False]
+    [Frame is ignored: False]
+    [Protocols in frame: eth:ethertype:pn_rt:pn_dcp]
+Ethernet II, Src: RaspberryPiF_5f:4b:64 (b8:27:eb:5f:4b:64), Dst: PCSSystemtec_13:96:7e (08:00:27:13:96:7e)
+    Destination: PCSSystemtec_13:96:7e (08:00:27:13:96:7e)
+        Address: PCSSystemtec_13:96:7e (08:00:27:13:96:7e)
+        .... ..0. .... .... .... .... = LG bit: Globally unique address (factory default)
+        .... ...0 .... .... .... .... = IG bit: Individual address (unicast)
+    Source: RaspberryPiF_5f:4b:64 (b8:27:eb:5f:4b:64)
+        Address: RaspberryPiF_5f:4b:64 (b8:27:eb:5f:4b:64)
+        .... ..0. .... .... .... .... = LG bit: Globally unique address (factory default)
+        .... ...0 .... .... .... .... = IG bit: Individual address (unicast)
+    Type: PROFINET (0x8892)
+PROFINET acyclic Real-Time, ID:0xfeff, Len: 120
+PROFINET DCP, Ident Ok , Xid:0xec8c7aca, IP, DeviceVendorValue, NameOfStation:"rtu-4b64", Dev-ID, Dev-Role, Dev-Options(14)
+    ServiceID: Identify (5)
+    ServiceType: Response Success (1)
+    Xid: 0xec8c7aca
+    Reserved: 0
+    DCPDataLength: 110
+    Block: IP/IP, BlockInfo: IP set, IP: 192.168.6.7, Subnet: 255.255.252.0, Gateway: 192.168.4.1
+        Option: IP (1)
+        Suboption: IP parameter (2)
+        DCPBlockLength: 14
+        BlockInfo: IP set (1)
+        IPaddress: 192.168.6.7
+        Subnetmask: 255.255.252.0
+        StandardGateway: 192.168.4.1
+    Block: Device/Manufacturer specific, BlockInfo: Reserved, DeviceVendorValue: "Water Treatment RTU"
+        Option: Device properties (2)
+        Suboption: Manufacturer specific (Type of Station) (1)
+        DCPBlockLength: 21
+        BlockInfo: Reserved (0)
+        DeviceVendorValue: Water Treatment RTU
+    Padding: 1 byte
+    Block: Device/NameOfStation, BlockInfo: Reserved, "rtu-4b64"
+        Option: Device properties (2)
+        Suboption: Name of Station (2)
+        DCPBlockLength: 10
+        BlockInfo: Reserved (0)
+        NameOfStation: rtu-4b64
+    Block: Device/Device ID, BlockInfo: Reserved, VendorID: 0x0493 / DeviceID: 0x0001
+        Option: Device properties (2)
+        Suboption: Device ID (3)
+        DCPBlockLength: 6
+        BlockInfo: Reserved (0)
+        VendorID: 0x0493
+        DeviceID: 0x0001
+    Block: Device/Device Role, BlockInfo: Reserved, IO-Device
+        Option: Device properties (2)
+        Suboption: Device Role (4)
+        DCPBlockLength: 4
+        BlockInfo: Reserved (0)
+        DeviceRoleDetails: 0x01
+        Reserved: 0
+    Block: Device/Device Options, BlockInfo: Reserved, 14 options
+        Option: Device properties (2)
+        Suboption: Device Options (5)
+        DCPBlockLength: 30
+        BlockInfo: Reserved (0)
+        Option: IP (1)
+        Suboption: IP parameter (2)
+        Option: IP (1)
+        Suboption: MAC address (1)
+        Option: Device properties (2)
+        Suboption: Manufacturer specific (Type of Station) (1)
+        Option: Device properties (2)
+        Suboption: Name of Station (2)
+        Option: Device properties (2)
+        Suboption: Device ID (3)
+        Option: Device properties (2)
+        Suboption: Device Role (4)
+        Option: Device properties (2)
+        Suboption: Device Options (5)
+        Option: Device properties (2)
+        Suboption: Alias Name (6)
+        Option: Control (5)
+        Suboption: Start Transaction (1)
+        Option: Control (5)
+        Suboption: End Transaction (2)
+        Option: Control (5)
+        Suboption: Signal (3)
+        Option: Control (5)
+        Suboption: Reset Factory Settings (5)
+        Option: Control (5)
+        Suboption: Reset to Factory (6)
+        Option: All Selector (255)
+        Suboption: ALL Selector (255)
+
+No.     Time           Source                Destination           DstPort Protocol Length Info
+    126 21.188285      192.168.6.13          192.168.6.7           34964   PNIO-CM  834    Connect request, ARBlockReq, IOCRBlockReq, IOCRBlockReq, AlarmCRBlockReq, ExpectedSubmoduleBlockReq
+
+Frame 126: 834 bytes on wire (6672 bits), 834 bytes captured (6672 bits) on interface \Device\NPF_{E997D933-4799-400F-AE46-D50781CF4B7E}, id 0
+    Section number: 1
+    Interface id: 0 (\Device\NPF_{E997D933-4799-400F-AE46-D50781CF4B7E})
+    Encapsulation type: Ethernet (1)
+    Arrival Time: Jan 23, 2026 15:30:04.792944000 Eastern Standard Time
+    UTC Arrival Time: Jan 23, 2026 20:30:04.792944000 UTC
+    Epoch Arrival Time: 1769200204.792944000
+    [Time shift for this packet: 0.000000000 seconds]
+    [Time delta from previous captured frame: 0.092450000 seconds]
+    [Time delta from previous displayed frame: 16.689601000 seconds]
+    [Time since reference or first frame: 21.188285000 seconds]
+    Frame Number: 126
+    Frame Length: 834 bytes (6672 bits)
+    Capture Length: 834 bytes (6672 bits)
+    [Frame is marked: False]
+    [Frame is ignored: False]
+    [Protocols in frame: eth:ethertype:ip:udp:dcerpc]
+    [Coloring Rule Name: DCERPC]
+    [Coloring Rule String: dcerpc]
+Ethernet II, Src: PCSSystemtec_13:96:7e (08:00:27:13:96:7e), Dst: RaspberryPiF_5f:4b:64 (b8:27:eb:5f:4b:64)
+    Destination: RaspberryPiF_5f:4b:64 (b8:27:eb:5f:4b:64)
+        Address: RaspberryPiF_5f:4b:64 (b8:27:eb:5f:4b:64)
+        .... ..0. .... .... .... .... = LG bit: Globally unique address (factory default)
+        .... ...0 .... .... .... .... = IG bit: Individual address (unicast)
+    Source: PCSSystemtec_13:96:7e (08:00:27:13:96:7e)
+        Address: PCSSystemtec_13:96:7e (08:00:27:13:96:7e)
+        .... ..0. .... .... .... .... = LG bit: Globally unique address (factory default)
+        .... ...0 .... .... .... .... = IG bit: Individual address (unicast)
+    Type: IPv4 (0x0800)
+Internet Protocol Version 4, Src: 192.168.6.13, Dst: 192.168.6.7
+User Datagram Protocol, Src Port: 57675, Dst Port: 34964
+    Source Port: 57675
+    Destination Port: 34964
+    Length: 800
+    Checksum: 0xc3b5 [unverified]
+    [Checksum Status: Unverified]
+    [Stream index: 5]
+    [Timestamps]
+    UDP payload (792 bytes)
+Distributed Computing Environment / Remote Procedure Call (DCE/RPC) Request, Seq: 1, Serial: 0, Frag: 0, FragLen: 712, [Resp: #127]
+    Version: 4
+    Packet type: Request (0)
+    Flags1: 0x22, Idempotent, Last Fragment
+    Flags2: 0x00
+    Data Representation: 100000 (Order: Little-endian, Char: ASCII, Float: IEEE)
+    Serial High: 0x00
+    Object UUID: 88b02394-3f89-bf2a-a533-82c617832c7d
+    Interface: PNIO (Device Interface) UUID: dea00001-6c97-11d1-8271-00a02442df7d
+    Activity: ec8cbbfd-019b-0040-a91f-8e23cd7ce846
+    Server boot time: Unknown (0)
+    Interface Ver: 1
+    Sequence num: 1
+    Opnum: 0
+    Interface Hint: 0xffff
+    Activity Hint: 0xffff
+    Fragment len: 712
+    Fragment num: 0
+    Auth proto: None (0)
+    Serial Low: 0x00
+    [Response in frame: 127]
+    Complete stub data (712 bytes)
+PROFINET IO (Device), Connect
+
+No.     Time           Source                Destination           DstPort Protocol Length Info
+    127 21.189472      192.168.6.7           192.168.6.13          57675   PNIO-CM  142    Connect response, Error: "IODConnectRes", "PNIO", "Connect: Faulty ARBlockReq", "Error in Parameter BlockLength"
+
+Frame 127: 142 bytes on wire (1136 bits), 142 bytes captured (1136 bits) on interface \Device\NPF_{E997D933-4799-400F-AE46-D50781CF4B7E}, id 0
+    Section number: 1
+    Interface id: 0 (\Device\NPF_{E997D933-4799-400F-AE46-D50781CF4B7E})
+    Encapsulation type: Ethernet (1)
+    Arrival Time: Jan 23, 2026 15:30:04.794131000 Eastern Standard Time
+    UTC Arrival Time: Jan 23, 2026 20:30:04.794131000 UTC
+    Epoch Arrival Time: 1769200204.794131000
+    [Time shift for this packet: 0.000000000 seconds]
+    [Time delta from previous captured frame: 0.001187000 seconds]
+    [Time delta from previous displayed frame: 0.001187000 seconds]
+    [Time since reference or first frame: 21.189472000 seconds]
+    Frame Number: 127
+    Frame Length: 142 bytes (1136 bits)
+    Capture Length: 142 bytes (1136 bits)
+    [Frame is marked: False]
+    [Frame is ignored: False]
+    [Protocols in frame: eth:ethertype:ip:udp:dcerpc]
+    [Coloring Rule Name: DCERPC]
+    [Coloring Rule String: dcerpc]
+Ethernet II, Src: RaspberryPiF_5f:4b:64 (b8:27:eb:5f:4b:64), Dst: PCSSystemtec_13:96:7e (08:00:27:13:96:7e)
+    Destination: PCSSystemtec_13:96:7e (08:00:27:13:96:7e)
+        Address: PCSSystemtec_13:96:7e (08:00:27:13:96:7e)
+        .... ..0. .... .... .... .... = LG bit: Globally unique address (factory default)
+        .... ...0 .... .... .... .... = IG bit: Individual address (unicast)
+    Source: RaspberryPiF_5f:4b:64 (b8:27:eb:5f:4b:64)
+        Address: RaspberryPiF_5f:4b:64 (b8:27:eb:5f:4b:64)
+        .... ..0. .... .... .... .... = LG bit: Globally unique address (factory default)
+        .... ...0 .... .... .... .... = IG bit: Individual address (unicast)
+    Type: IPv4 (0x0800)
+Internet Protocol Version 4, Src: 192.168.6.7, Dst: 192.168.6.13
+User Datagram Protocol, Src Port: 34964, Dst Port: 57675
+    Source Port: 34964
+    Destination Port: 57675
+    Length: 108
+    Checksum: 0x6a46 [unverified]
+    [Checksum Status: Unverified]
+    [Stream index: 5]
+    [Timestamps]
+    UDP payload (100 bytes)
+Distributed Computing Environment / Remote Procedure Call (DCE/RPC) Response, Seq: 1, Serial: 0, Frag: 0, FragLen: 20, [Req: #126]
+    Version: 4
+    Packet type: Response (2)
+    Flags1: 0x28, Idempotent, No Fack
+    Flags2: 0x00
+    Data Representation: 000000 (Order: Big-endian, Char: ASCII, Float: IEEE)
+    Serial High: 0x00
+    Object UUID: 88b02394-3f89-bf2a-a533-82c617832c7d
+    Interface: PNIO (Device Interface) UUID: dea00001-6c97-11d1-8271-00a02442df7d
+    Activity: ec8cbbfd-019b-0040-a91f-8e23cd7ce846
+    Server boot time: Unknown (0)
+    Interface Ver: 1
+    Sequence num: 1
+    Opnum: 0
+    Interface Hint: 0xffff
+    Activity Hint: 0xffff
+    Fragment len: 20
+    Fragment num: 0
+    Auth proto: None (0)
+    Serial Low: 0x00
+    [Request in frame: 126]
+    [Time from request: 0.001187000 seconds]
+    Complete stub data (20 bytes)
+PROFINET IO (Device), Connect
