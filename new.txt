@@ -1,18 +1,18 @@
 No.     Time           Source                Destination           DstPort Protocol Length Info
-     44 4.497471       PCSSystemtec_13:96:7e PROFIBUSNutz_00:00:00         PN-DCP   60     Ident Req, Xid:0xec8c7aca, All
+    415 17.110076      PCSSystemtec_13:96:7e PROFIBUSNutz_00:00:00         PN-DCP   60     Ident Req, Xid:0xed30a0d4, All
 
-Frame 44: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface \Device\NPF_{E997D933-4799-400F-AE46-D50781CF4B7E}, id 0
+Frame 415: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface \Device\NPF_{E997D933-4799-400F-AE46-D50781CF4B7E}, id 0
     Section number: 1
     Interface id: 0 (\Device\NPF_{E997D933-4799-400F-AE46-D50781CF4B7E})
     Encapsulation type: Ethernet (1)
-    Arrival Time: Jan 23, 2026 15:29:48.102130000 Eastern Standard Time
-    UTC Arrival Time: Jan 23, 2026 20:29:48.102130000 UTC
-    Epoch Arrival Time: 1769200188.102130000
+    Arrival Time: Jan 23, 2026 18:29:05.743042000 Eastern Standard Time
+    UTC Arrival Time: Jan 23, 2026 23:29:05.743042000 UTC
+    Epoch Arrival Time: 1769210945.743042000
     [Time shift for this packet: 0.000000000 seconds]
-    [Time delta from previous captured frame: 0.007655000 seconds]
+    [Time delta from previous captured frame: 0.012521000 seconds]
     [Time delta from previous displayed frame: 0.000000000 seconds]
-    [Time since reference or first frame: 4.497471000 seconds]
-    Frame Number: 44
+    [Time since reference or first frame: 17.110076000 seconds]
+    Frame Number: 415
     Frame Length: 60 bytes (480 bits)
     Capture Length: 60 bytes (480 bits)
     [Frame is marked: False]
@@ -31,10 +31,10 @@ Ethernet II, Src: PCSSystemtec_13:96:7e (08:00:27:13:96:7e), Dst: PROFIBUSNutz_0
         .... ...0 .... .... .... .... = IG bit: Individual address (unicast)
     Type: PROFINET (0x8892)
 PROFINET acyclic Real-Time, ID:0xfefe, Len:  44
-PROFINET DCP, Ident Req, Xid:0xec8c7aca, All
+PROFINET DCP, Ident Req, Xid:0xed30a0d4, All
     ServiceID: Identify (5)
     ServiceType: Request (0)
-    Xid: 0xec8c7aca
+    Xid: 0xed30a0d4
     ResponseDelay: 1
     DCPDataLength: 4
     Block: All/All
@@ -43,20 +43,20 @@ PROFINET DCP, Ident Req, Xid:0xec8c7aca, All
         DCPBlockLength: 0
 
 No.     Time           Source                Destination           DstPort Protocol Length Info
-     45 4.498684       RaspberryPiF_5f:4b:64 PCSSystemtec_13:96:7e         PN-DCP   136    Ident Ok , Xid:0xec8c7aca, IP, DeviceVendorValue, NameOfStation:"rtu-4b64", Dev-ID, Dev-Role, Dev-Options(14)
+    416 17.111687      RaspberryPiF_5f:4b:64 PCSSystemtec_13:96:7e         PN-DCP   136    Ident Ok , Xid:0xed30a0d4, IP, DeviceVendorValue, NameOfStation:"rtu-4b64", Dev-ID, Dev-Role, Dev-Options(14)
 
-Frame 45: 136 bytes on wire (1088 bits), 136 bytes captured (1088 bits) on interface \Device\NPF_{E997D933-4799-400F-AE46-D50781CF4B7E}, id 0
+Frame 416: 136 bytes on wire (1088 bits), 136 bytes captured (1088 bits) on interface \Device\NPF_{E997D933-4799-400F-AE46-D50781CF4B7E}, id 0
     Section number: 1
     Interface id: 0 (\Device\NPF_{E997D933-4799-400F-AE46-D50781CF4B7E})
     Encapsulation type: Ethernet (1)
-    Arrival Time: Jan 23, 2026 15:29:48.103343000 Eastern Standard Time
-    UTC Arrival Time: Jan 23, 2026 20:29:48.103343000 UTC
-    Epoch Arrival Time: 1769200188.103343000
+    Arrival Time: Jan 23, 2026 18:29:05.744653000 Eastern Standard Time
+    UTC Arrival Time: Jan 23, 2026 23:29:05.744653000 UTC
+    Epoch Arrival Time: 1769210945.744653000
     [Time shift for this packet: 0.000000000 seconds]
-    [Time delta from previous captured frame: 0.001213000 seconds]
-    [Time delta from previous displayed frame: 0.001213000 seconds]
-    [Time since reference or first frame: 4.498684000 seconds]
-    Frame Number: 45
+    [Time delta from previous captured frame: 0.001611000 seconds]
+    [Time delta from previous displayed frame: 0.001611000 seconds]
+    [Time since reference or first frame: 17.111687000 seconds]
+    Frame Number: 416
     Frame Length: 136 bytes (1088 bits)
     Capture Length: 136 bytes (1088 bits)
     [Frame is marked: False]
@@ -73,10 +73,10 @@ Ethernet II, Src: RaspberryPiF_5f:4b:64 (b8:27:eb:5f:4b:64), Dst: PCSSystemtec_1
         .... ...0 .... .... .... .... = IG bit: Individual address (unicast)
     Type: PROFINET (0x8892)
 PROFINET acyclic Real-Time, ID:0xfeff, Len: 120
-PROFINET DCP, Ident Ok , Xid:0xec8c7aca, IP, DeviceVendorValue, NameOfStation:"rtu-4b64", Dev-ID, Dev-Role, Dev-Options(14)
+PROFINET DCP, Ident Ok , Xid:0xed30a0d4, IP, DeviceVendorValue, NameOfStation:"rtu-4b64", Dev-ID, Dev-Role, Dev-Options(14)
     ServiceID: Identify (5)
     ServiceType: Response Success (1)
-    Xid: 0xec8c7aca
+    Xid: 0xed30a0d4
     Reserved: 0
     DCPDataLength: 110
     Block: IP/IP, BlockInfo: IP set, IP: 192.168.6.7, Subnet: 255.255.252.0, Gateway: 192.168.4.1
@@ -149,20 +149,20 @@ PROFINET DCP, Ident Ok , Xid:0xec8c7aca, IP, DeviceVendorValue, NameOfStation:"r
         Suboption: ALL Selector (255)
 
 No.     Time           Source                Destination           DstPort Protocol Length Info
-    126 21.188285      192.168.6.13          192.168.6.7           34964   PNIO-CM  834    Connect request, ARBlockReq, IOCRBlockReq, IOCRBlockReq, AlarmCRBlockReq, ExpectedSubmoduleBlockReq
+    640 39.154087      192.168.6.13          192.168.6.7           34964   PNIO-CM  834    Connect request, ARBlockReq, Reserved, Unknown, COContainerContent
 
-Frame 126: 834 bytes on wire (6672 bits), 834 bytes captured (6672 bits) on interface \Device\NPF_{E997D933-4799-400F-AE46-D50781CF4B7E}, id 0
+Frame 640: 834 bytes on wire (6672 bits), 834 bytes captured (6672 bits) on interface \Device\NPF_{E997D933-4799-400F-AE46-D50781CF4B7E}, id 0
     Section number: 1
     Interface id: 0 (\Device\NPF_{E997D933-4799-400F-AE46-D50781CF4B7E})
     Encapsulation type: Ethernet (1)
-    Arrival Time: Jan 23, 2026 15:30:04.792944000 Eastern Standard Time
-    UTC Arrival Time: Jan 23, 2026 20:30:04.792944000 UTC
-    Epoch Arrival Time: 1769200204.792944000
+    Arrival Time: Jan 23, 2026 18:29:27.787053000 Eastern Standard Time
+    UTC Arrival Time: Jan 23, 2026 23:29:27.787053000 UTC
+    Epoch Arrival Time: 1769210967.787053000
     [Time shift for this packet: 0.000000000 seconds]
-    [Time delta from previous captured frame: 0.092450000 seconds]
-    [Time delta from previous displayed frame: 16.689601000 seconds]
-    [Time since reference or first frame: 21.188285000 seconds]
-    Frame Number: 126
+    [Time delta from previous captured frame: 0.061367000 seconds]
+    [Time delta from previous displayed frame: 22.042400000 seconds]
+    [Time since reference or first frame: 39.154087000 seconds]
+    Frame Number: 640
     Frame Length: 834 bytes (6672 bits)
     Capture Length: 834 bytes (6672 bits)
     [Frame is marked: False]
@@ -181,25 +181,25 @@ Ethernet II, Src: PCSSystemtec_13:96:7e (08:00:27:13:96:7e), Dst: RaspberryPiF_5
         .... ...0 .... .... .... .... = IG bit: Individual address (unicast)
     Type: IPv4 (0x0800)
 Internet Protocol Version 4, Src: 192.168.6.13, Dst: 192.168.6.7
-User Datagram Protocol, Src Port: 57675, Dst Port: 34964
-    Source Port: 57675
+User Datagram Protocol, Src Port: 34347, Dst Port: 34964
+    Source Port: 34347
     Destination Port: 34964
     Length: 800
-    Checksum: 0xc3b5 [unverified]
+    Checksum: 0x4c66 [unverified]
     [Checksum Status: Unverified]
-    [Stream index: 5]
+    [Stream index: 29]
     [Timestamps]
     UDP payload (792 bytes)
-Distributed Computing Environment / Remote Procedure Call (DCE/RPC) Request, Seq: 1, Serial: 0, Frag: 0, FragLen: 712, [Resp: #127]
+Distributed Computing Environment / Remote Procedure Call (DCE/RPC) Request, Seq: 1, Serial: 0, Frag: 0, FragLen: 712, [Resp: #641]
     Version: 4
     Packet type: Request (0)
     Flags1: 0x22, Idempotent, Last Fragment
     Flags2: 0x00
     Data Representation: 100000 (Order: Little-endian, Char: ASCII, Float: IEEE)
     Serial High: 0x00
-    Object UUID: 88b02394-3f89-bf2a-a533-82c617832c7d
+    Object UUID: 890c6e99-a593-bc52-9107-73c07febce70
     Interface: PNIO (Device Interface) UUID: dea00001-6c97-11d1-8271-00a02442df7d
-    Activity: ec8cbbfd-019b-0040-a91f-8e23cd7ce846
+    Activity: ed30f6f1-019b-0040-a91f-8e23cd7ce846
     Server boot time: Unknown (0)
     Interface Ver: 1
     Sequence num: 1
@@ -210,25 +210,25 @@ Distributed Computing Environment / Remote Procedure Call (DCE/RPC) Request, Seq
     Fragment num: 0
     Auth proto: None (0)
     Serial Low: 0x00
-    [Response in frame: 127]
+    [Response in frame: 641]
     Complete stub data (712 bytes)
 PROFINET IO (Device), Connect
 
 No.     Time           Source                Destination           DstPort Protocol Length Info
-    127 21.189472      192.168.6.7           192.168.6.13          57675   PNIO-CM  142    Connect response, Error: "IODConnectRes", "PNIO", "Connect: Faulty ARBlockReq", "Error in Parameter BlockLength"
+    641 39.155476      192.168.6.7           192.168.6.13          34347   PNIO-CM  142    Connect response, Error: "IODConnectRes", "PNIO", "CMRPC", "Unknown Blocks"
 
-Frame 127: 142 bytes on wire (1136 bits), 142 bytes captured (1136 bits) on interface \Device\NPF_{E997D933-4799-400F-AE46-D50781CF4B7E}, id 0
+Frame 641: 142 bytes on wire (1136 bits), 142 bytes captured (1136 bits) on interface \Device\NPF_{E997D933-4799-400F-AE46-D50781CF4B7E}, id 0
     Section number: 1
     Interface id: 0 (\Device\NPF_{E997D933-4799-400F-AE46-D50781CF4B7E})
     Encapsulation type: Ethernet (1)
-    Arrival Time: Jan 23, 2026 15:30:04.794131000 Eastern Standard Time
-    UTC Arrival Time: Jan 23, 2026 20:30:04.794131000 UTC
-    Epoch Arrival Time: 1769200204.794131000
+    Arrival Time: Jan 23, 2026 18:29:27.788442000 Eastern Standard Time
+    UTC Arrival Time: Jan 23, 2026 23:29:27.788442000 UTC
+    Epoch Arrival Time: 1769210967.788442000
     [Time shift for this packet: 0.000000000 seconds]
-    [Time delta from previous captured frame: 0.001187000 seconds]
-    [Time delta from previous displayed frame: 0.001187000 seconds]
-    [Time since reference or first frame: 21.189472000 seconds]
-    Frame Number: 127
+    [Time delta from previous captured frame: 0.001389000 seconds]
+    [Time delta from previous displayed frame: 0.001389000 seconds]
+    [Time since reference or first frame: 39.155476000 seconds]
+    Frame Number: 641
     Frame Length: 142 bytes (1136 bits)
     Capture Length: 142 bytes (1136 bits)
     [Frame is marked: False]
@@ -247,25 +247,25 @@ Ethernet II, Src: RaspberryPiF_5f:4b:64 (b8:27:eb:5f:4b:64), Dst: PCSSystemtec_1
         .... ...0 .... .... .... .... = IG bit: Individual address (unicast)
     Type: IPv4 (0x0800)
 Internet Protocol Version 4, Src: 192.168.6.7, Dst: 192.168.6.13
-User Datagram Protocol, Src Port: 34964, Dst Port: 57675
+User Datagram Protocol, Src Port: 34964, Dst Port: 34347
     Source Port: 34964
-    Destination Port: 57675
+    Destination Port: 34347
     Length: 108
-    Checksum: 0x6a46 [unverified]
+    Checksum: 0xb510 [unverified]
     [Checksum Status: Unverified]
-    [Stream index: 5]
+    [Stream index: 29]
     [Timestamps]
     UDP payload (100 bytes)
-Distributed Computing Environment / Remote Procedure Call (DCE/RPC) Response, Seq: 1, Serial: 0, Frag: 0, FragLen: 20, [Req: #126]
+Distributed Computing Environment / Remote Procedure Call (DCE/RPC) Response, Seq: 1, Serial: 0, Frag: 0, FragLen: 20, [Req: #640]
     Version: 4
     Packet type: Response (2)
     Flags1: 0x28, Idempotent, No Fack
     Flags2: 0x00
     Data Representation: 000000 (Order: Big-endian, Char: ASCII, Float: IEEE)
     Serial High: 0x00
-    Object UUID: 88b02394-3f89-bf2a-a533-82c617832c7d
+    Object UUID: 890c6e99-a593-bc52-9107-73c07febce70
     Interface: PNIO (Device Interface) UUID: dea00001-6c97-11d1-8271-00a02442df7d
-    Activity: ec8cbbfd-019b-0040-a91f-8e23cd7ce846
+    Activity: ed30f6f1-019b-0040-a91f-8e23cd7ce846
     Server boot time: Unknown (0)
     Interface Ver: 1
     Sequence num: 1
@@ -276,7 +276,7 @@ Distributed Computing Environment / Remote Procedure Call (DCE/RPC) Response, Se
     Fragment num: 0
     Auth proto: None (0)
     Serial Low: 0x00
-    [Request in frame: 126]
-    [Time from request: 0.001187000 seconds]
+    [Request in frame: 640]
+    [Time from request: 0.001389000 seconds]
     Complete stub data (20 bytes)
 PROFINET IO (Device), Connect
