@@ -164,33 +164,55 @@ handling.
 
 ---
 
-## Section 2: `/api/v1/slots` HTTP Endpoint (Fallback Only)
+## Section 2: HTTP Endpoints (Implemented)
+
+### Status
+
+Both endpoints are **implemented** in `src/health/health_check.c`:
+- `/api/v1/slots` — `slots_to_json()` at line 615
+- `/api/v1/gsdml` — `serve_gsdml_file()` at line 660
+- Route handler at line 811, after `/config`, before 404
 
 ### Context
 
-This is a NON-STANDARD extension. Standard PROFINET uses GSDML files and
-ModuleDiffBlock/Record Read for module discovery. This HTTP endpoint exists
-as insurance for when the controller cannot obtain the GSDML file and
+These are NON-STANDARD extensions. Standard PROFINET uses GSDML files (on disk)
+and ModuleDiffBlock/Record Read for module discovery. These HTTP endpoints exist
+as fallbacks when the controller doesn't have the GSDML file locally and
 standard discovery mechanisms have failed.
 
 The controller team's fallback chain (both documents agree on this order):
-1. Parse GSDML file (standard, offline)
-2. Use cached config from a previous successful connection
-3. **GET /api/v1/slots from RTU HTTP** (this endpoint — non-standard fallback)
-4. DAP-only connect + Record Read 0xF844 (standard PROFINET)
+1. Local GSDML file on disk (standard, offline)
+2. **GET /api/v1/gsdml from RTU HTTP** — fetch the standard device description
+3. Cached config from a previous successful connection
+4. **GET /api/v1/slots from RTU HTTP** — proprietary slot list
+5. DAP-only connect + Record Read 0xF844 (standard PROFINET)
 
-This endpoint is NOT the primary discovery mechanism. The controller tries
-standard PROFINET mechanisms first. HTTP is fallback #3 of 4.
+### 2.1 `/api/v1/gsdml` — Device Description (Fallback #2)
 
-### Implementation
+Serves the raw GSDML XML file. This is architecturally preferred over
+`/api/v1/slots` because the GSDML IS the standard device description — only
+the transport (HTTP vs. file) is non-standard. The controller can cache it
+locally, making future connections use fallback #1.
 
-**File to modify**: `src/health/health_check.c`
-**Location**: After line 688 (the `/config` endpoint handler)
+```
+GET /api/v1/gsdml
+Content-Type: application/xml
+```
 
-Add a new endpoint that reads the modules table and returns the current
-slot configuration as JSON.
+**Implementation details:**
+- Streams the GSDML file in 4KB chunks (file exceeds 8KB response buffer)
+- Search path: `/opt/water-treat/gsd/` (installed) then `gsd/` (development)
+- Returns HTTP 200 with raw XML on success
+- Returns HTTP 404 with JSON error if GSDML file not found
 
-### Endpoint specification
+**Controller-side usage:**
+1. Fetch GSDML via HTTP
+2. Save to local cache (e.g., `/var/cache/water-controller/gsdml/`)
+3. Parse as standard GSDML — same code path as local file
+4. Build ExpectedSubmoduleBlockReq from parsed module catalog
+5. Next connection uses cached file (fallback #1), no HTTP needed
+
+### 2.2 `/api/v1/slots` — Slot Configuration (Fallback #4)
 
 ```
 GET /api/v1/slots
@@ -292,26 +314,15 @@ Both the controller and RTU implementations must conform to this spec.
 The controller must handle TCP connection refused (server not yet listening)
 the same as HTTP 503 — retry later or fall through to next discovery method.
 
-### Implementation approach
+### Implementation (DONE)
 
-The data source is `db_module_list()` — the same function `profinet_manager.c`
-uses to plug modules. The handler reads from the database, not from the p-net
-runtime state, so it is available even before `pnet_init()` completes.
-
-```c
-// In handle_http_request(), after the /config handler:
-
-} else if (strcmp(path, "/api/v1/slots") == 0) {
-    /* Slot discovery for controller fallback (non-standard) */
-    slots_to_json(response_body, sizeof(response_body));
-    content_type = "application/json";
-}
-```
-
-The `slots_to_json()` function calls `db_module_list()` and formats each
-module as a JSON object. Use `is_actuator_module()` (line 157-160) to
-determine direction. Compute `data_size` from input_size or output_size
-depending on direction.
+Implemented in `src/health/health_check.c`:
+- `slots_to_json()` at line 615
+- Data source: `db_module_list(g_health.db, ...)` — reads from database,
+  available before `pnet_init()` completes
+- Direction: `(module_ident & 0x100) != 0` → actuator ("output"), else sensor ("input")
+- Data size: 5 bytes (`GSDML_SENSOR_INPUT_SIZE`) for sensors,
+  4 bytes (`GSDML_ACTUATOR_OUTPUT_SIZE`) for actuators
 
 ### DAP is NOT included
 
@@ -447,11 +458,15 @@ the cyclic handler writes/reads.
 - [ ] `is_actuator_module()` correctly classifies all module idents
 - [ ] Input/output sizes match GSDML data lengths (5 bytes sensor, 4 bytes actuator)
 
-### For HTTP fallback
+### For HTTP endpoints
 
-- [ ] `GET /api/v1/slots` returns correct JSON per contract in Section 2
-- [ ] Response uses integer idents (16, not "0x00000010")
-- [ ] DAP (slot 0) is NOT included in response
-- [ ] Returns HTTP 200 with `{"slot_count": 0, "slots": []}` when no modules configured
-- [ ] Returns HTTP 503 when subsystem unavailable
+- [x] `GET /api/v1/slots` returns correct JSON per contract in Section 2.2
+- [x] Response uses integer idents (16, not "0x00000010")
+- [x] DAP (slot 0) is NOT included in response
+- [x] Returns HTTP 200 with `{"slot_count": 0, "slots": []}` when no modules configured
+- [x] Returns HTTP 503 when database unavailable
+- [x] Direction derived from `(module_ident & 0x100) != 0`
+- [x] `GET /api/v1/gsdml` returns raw XML with `Content-Type: application/xml`
+- [ ] `GET /api/v1/gsdml` returns HTTP 404 when GSDML file missing
+- [ ] GSDML file exists at `/opt/water-treat/gsd/` (installed) or `gsd/` (dev)
 - [ ] Port matches controller's expected RTU health port (9081)
