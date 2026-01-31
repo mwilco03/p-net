@@ -79,7 +79,7 @@ Expected block_length = `54 + strlen(station_name)`.
 
 ---
 
-### Bug 0.2: AlarmCRBlockReq tag headers are zero (BLOCKING after 0.1 fixed)
+### Bug 0.2: AlarmCRBlockReq tag headers are zero (BLOCKING)
 
 **File**: `src/profinet/profinet_rpc.c`
 **Lines**: 584-585
@@ -90,12 +90,21 @@ Expected block_length = `54 + strlen(station_name)`.
 585    write_u16_be(buffer, 0, &pos);  /* Tag header low */
 ```
 
-**Problem**: PROFINET requires VLAN tag headers for alarm CR.
-- `tag_header_high` = 0xC000 (VLAN priority 6)
-- `tag_header_low` = 0xA000 (VLAN priority 5)
+**Problem**: PROFINET requires VLAN priority tags in the AlarmCR block.
+- `tag_header_high` = 0xC000 (VLAN priority 6, vlan_id 0)
+- `tag_header_low` = 0xA000 (VLAN priority 5, vlan_id 0)
 
-p-net may accept 0x0000 in some versions but the spec requires these values.
-Frame 1 in the pcap (the correct manual connect) uses C000/A000.
+p-net **rejects 0x0000**. The validation is in `pf_cmdev.c:4088-4098`:
+```c
+if (p_ar->alarm_cr_request.alarm_cr_tag_header_high.alarm_user_priority != 6)
+{
+   pf_set_error(p_stat, ..., PNET_ERROR_CODE_1_CONN_FAULTY_ALARM_BLOCK_REQ, 11);
+   ret = -1;
+}
+```
+The uint16 is decoded as: bits 0-11 = vlan_id (must be 0), bits 13-15 = priority.
+0x0000 → priority=0 → rejected with error code 11/12.
+0xC000 → priority=6 → accepted. 0xA000 → priority=5 → accepted.
 
 **Fix**:
 ```c
