@@ -164,20 +164,23 @@ handling.
 
 ---
 
-## Section 2: New `/slots` HTTP Endpoint (Fallback Only)
+## Section 2: `/api/v1/slots` HTTP Endpoint (Fallback Only)
 
 ### Context
 
 This is a NON-STANDARD extension. Standard PROFINET uses GSDML files and
-ModuleDiffBlock/Record Read for module discovery. This HTTP endpoint is a
-fallback for when the controller cannot obtain the GSDML file and standard
-discovery mechanisms have failed.
+ModuleDiffBlock/Record Read for module discovery. This HTTP endpoint exists
+as insurance for when the controller cannot obtain the GSDML file and
+standard discovery mechanisms have failed.
 
-The controller team's fallback chain:
-1. Parse GSDML file (standard)
-2. Use cached config from previous connection
-3. **GET /slots from RTU HTTP** (this endpoint)
-4. DAP-only connect + Record Read 0xF844
+The controller team's fallback chain (both documents agree on this order):
+1. Parse GSDML file (standard, offline)
+2. Use cached config from a previous successful connection
+3. **GET /api/v1/slots from RTU HTTP** (this endpoint — non-standard fallback)
+4. DAP-only connect + Record Read 0xF844 (standard PROFINET)
+
+This endpoint is NOT the primary discovery mechanism. The controller tries
+standard PROFINET mechanisms first. HTTP is fallback #3 of 4.
 
 ### Implementation
 
@@ -190,9 +193,26 @@ slot configuration as JSON.
 ### Endpoint specification
 
 ```
-GET /slots
+GET /api/v1/slots
 Content-Type: application/json
 ```
+
+### API Contract (agreed between both teams)
+
+This is the single source of truth for the `/api/v1/slots` contract.
+Both the controller and RTU implementations must conform to this spec.
+
+**Design decisions and rationale:**
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Path | `/api/v1/slots` | Versioned path separates API from health endpoints. Matches controller's `/api/v1/` convention. |
+| Ident encoding | Integer (decimal) | JSON-native. No string parsing needed. DB stores integers. C compares work: `json_val == 0x10` since 0x10 == 16. Hex is for documentation only. |
+| DAP included | No | DAP is always present with fixed config defined in GSDML. Controller already knows DAP. Including it creates a redundant source of truth that could contradict GSDML. |
+| Data source | Database (`db_module_list()`) | Available before `pnet_init()` completes. Represents configured intent, not just runtime state. Answers "what should be plugged?" not "what is the stack doing right now?" |
+| Audience | Machine-to-machine | This endpoint is consumed by the controller C code, not by operators. Operators use the controller's HMI, which presents RTU data through its own API. |
+
+### Response format
 
 **Response when modules are loaded** (HTTP 200):
 ```json
@@ -204,37 +224,54 @@ Content-Type: application/json
       "subslot": 1,
       "module_ident": 16,
       "submodule_ident": 17,
-      "module_type": "sensor",
-      "name": "pH Sensor",
       "direction": "input",
-      "input_size": 5,
-      "output_size": 0
+      "data_size": 5
     },
     {
       "slot": 2,
       "subslot": 1,
       "module_ident": 256,
       "submodule_ident": 257,
-      "module_type": "actuator",
-      "name": "Main Pump",
       "direction": "output",
-      "input_size": 0,
-      "output_size": 4
+      "data_size": 4
     },
     {
       "slot": 5,
       "subslot": 1,
       "module_ident": 64,
       "submodule_ident": 65,
-      "module_type": "sensor",
-      "name": "Temperature",
       "direction": "input",
-      "input_size": 5,
-      "output_size": 0
+      "data_size": 5
     }
   ]
 }
 ```
+
+**Field definitions:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `slot` | integer | Slot number (1-246). DAP at slot 0 is never included. |
+| `subslot` | integer | Subslot number (always 1 for application modules) |
+| `module_ident` | integer | Module identifier per GSDML. E.g., 16 = pH (0x10), 256 = Pump (0x100) |
+| `submodule_ident` | integer | Submodule identifier. Convention: module_ident + 1 |
+| `direction` | string | `"input"` (sensor) or `"output"` (actuator) |
+| `data_size` | integer | Bytes per cyclic update. 5 for sensors, 4 for actuators. |
+
+**Module ident reference (decimal / hex):**
+
+| Module | Decimal | Hex | Submodule | Direction | Data Size |
+|--------|---------|-----|-----------|-----------|-----------|
+| pH | 16 | 0x00000010 | 17 | input | 5 |
+| TDS | 32 | 0x00000020 | 33 | input | 5 |
+| Turbidity | 48 | 0x00000030 | 49 | input | 5 |
+| Temperature | 64 | 0x00000040 | 65 | input | 5 |
+| Flow | 80 | 0x00000050 | 81 | input | 5 |
+| Level | 96 | 0x00000060 | 97 | input | 5 |
+| Generic AI | 112 | 0x00000070 | 113 | input | 5 |
+| Pump | 256 | 0x00000100 | 257 | output | 4 |
+| Valve | 272 | 0x00000110 | 273 | output | 4 |
+| Generic DO | 288 | 0x00000120 | 289 | output | 4 |
 
 **Response when database is empty** (HTTP 200, no application modules):
 ```json
@@ -244,40 +281,56 @@ Content-Type: application/json
 }
 ```
 
-**Response when PROFINET not initialized** (HTTP 503):
+**Response when PROFINET subsystem not initialized** (HTTP 503):
 ```json
 {
-  "error": "PROFINET subsystem not initialized",
-  "status": "unavailable"
+  "error": "PROFINET subsystem not initialized"
 }
 ```
 
+**Response when HTTP server is starting** (HTTP 503):
+The controller must handle TCP connection refused (server not yet listening)
+the same as HTTP 503 — retry later or fall through to next discovery method.
+
 ### Implementation approach
 
-The data source is the same `db_module_list()` function already used by
-`profinet_manager.c` to plug modules. The `/slots` handler reads from the
-database, not from the p-net runtime state, so it's available even before
-`pnet_init()` completes.
+The data source is `db_module_list()` — the same function `profinet_manager.c`
+uses to plug modules. The handler reads from the database, not from the p-net
+runtime state, so it is available even before `pnet_init()` completes.
 
 ```c
 // In handle_http_request(), after the /config handler:
 
-} else if (strcmp(path, "/slots") == 0) {
-    /* Slot configuration endpoint (fallback for controller discovery) */
+} else if (strcmp(path, "/api/v1/slots") == 0) {
+    /* Slot discovery for controller fallback (non-standard) */
     slots_to_json(response_body, sizeof(response_body));
     content_type = "application/json";
 }
 ```
 
 The `slots_to_json()` function calls `db_module_list()` and formats each
-module as a JSON object with the fields above. Use `is_actuator_module()`
-(line 157-160) for direction determination.
+module as a JSON object. Use `is_actuator_module()` (line 157-160) to
+determine direction. Compute `data_size` from input_size or output_size
+depending on direction.
 
 ### DAP is NOT included
 
-The `/slots` response lists only application modules (slots 1-246).
-DAP (slot 0) is always present and has a fixed configuration that the
-controller already knows from the GSDML. Including it would be redundant.
+The response lists only application modules (slots 1-246).
+DAP (slot 0) is always present and has a fixed configuration that both
+teams know from the GSDML. Including it would create a redundant source
+of truth — if the GSDML says one thing and the HTTP response says another,
+the controller doesn't know which to trust. Single source of truth for
+DAP is the GSDML.
+
+### Operator visibility note
+
+This endpoint is machine-to-machine. Operators should NOT interact with
+RTU HTTP directly. The controller's HMI (Next.js + FastAPI at
+`web/api/app/api/v1/`) presents RTU slot data through its own API after
+fetching from the RTU. This separation means:
+- Operators see slot data through the controller's unified interface
+- The RTU's HTTP is a low-level machine interface, not an operator console
+- No confusion about "which system am I talking to?"
 
 ---
 
@@ -396,7 +449,9 @@ the cyclic handler writes/reads.
 
 ### For HTTP fallback
 
-- [ ] `/slots` endpoint returns correct JSON
-- [ ] `/slots` returns HTTP 200 with empty array when no modules configured
-- [ ] `/slots` returns HTTP 503 when subsystem unavailable
+- [ ] `GET /api/v1/slots` returns correct JSON per contract in Section 2
+- [ ] Response uses integer idents (16, not "0x00000010")
+- [ ] DAP (slot 0) is NOT included in response
+- [ ] Returns HTTP 200 with `{"slot_count": 0, "slots": []}` when no modules configured
+- [ ] Returns HTTP 503 when subsystem unavailable
 - [ ] Port matches controller's expected RTU health port (9081)

@@ -401,30 +401,20 @@ HTTP fallback should ONLY activate when:
 2. DAP-only connect + Record Read 0xF844 has failed
 3. Standard discovery mechanisms are exhausted
 
-### What to request
+### API Contract
 
-The RTU already has a `/config` endpoint (`health_check.c:684-688`) returning:
+The RTU team document (RTU_TEAM_INSTRUCTIONS.md, Section 2) contains the
+full API contract. Both documents reference the same spec. Key points:
+
+```
+GET http://<rtu_ip>:9081/api/v1/slots
+Content-Type: application/json
+```
+
+**Response format:**
 ```json
 {
-  "profinet": {
-    "station_name": "rtu-4b64",
-    "vendor_id": 1171,
-    "device_id": 1,
-    "enabled": true
-  }
-}
-```
-
-This does NOT include slot/module data. A new endpoint is needed on the RTU
-side (see RTU team document). The controller would call:
-
-```
-GET http://<rtu_ip>:9081/slots
-```
-
-Response format (proposed):
-```json
-{
+  "slot_count": 2,
   "slots": [
     {"slot": 1, "subslot": 1, "module_ident": 16, "submodule_ident": 17,
      "direction": "input", "data_size": 5},
@@ -434,14 +424,32 @@ Response format (proposed):
 }
 ```
 
+**Contract details** (see RTU doc for full field definitions):
+- **Path**: `/api/v1/slots` (versioned, not `/slots`)
+- **Idents**: Integer (decimal). 16 = pH sensor (0x10), 256 = Pump (0x100)
+- **DAP**: NOT included. Slot 0 is always DAP — controller knows this from GSDML.
+- **Source**: Database (`db_module_list()`), available before PROFINET init.
+- **Errors**: HTTP 503 when subsystem unavailable. Connection refused = not ready.
+
 ### Controller-side implementation
 
 **`web/api/app/api/v1/discover.py`** — The `probe-ip` endpoint (line 902)
-already calls RTU HTTP. Extend it to also fetch `/slots` when available.
+already calls RTU HTTP. Extend it to also fetch `/api/v1/slots` when available.
 
 **`src/profinet/profinet_rpc.c`** or a new file — Before building the
 connect request, check if HTTP slot data is available. If so, use it to
 populate `params->expected_config[]`. If not, fall through to DAP-only.
+
+To build ExpectedSubmoduleBlockReq from the JSON response:
+```c
+for each slot in response.slots:
+    expected_config[i].slot = slot.slot
+    expected_config[i].subslot = slot.subslot
+    expected_config[i].module_ident = slot.module_ident       // integer, use directly
+    expected_config[i].submodule_ident = slot.submodule_ident // integer, use directly
+    expected_config[i].is_input = (strcmp(slot.direction, "input") == 0)
+    expected_config[i].data_size = slot.data_size
+```
 
 ### Fallback chain pseudocode
 
@@ -455,10 +463,10 @@ populate `params->expected_config[]`. If not, fall through to DAP-only.
    NO  → Continue
 
 3. Can we reach RTU HTTP on port 9081?
-   YES → GET /slots
+   YES → GET /api/v1/slots
          200 with data → Build ExpectedSubmoduleBlockReq from JSON → Phase 2
          503 or empty  → Continue
-   NO  → Continue (RTU HTTP not available)
+   NO  → Continue (connection refused = RTU HTTP not available)
 
 4. Fall back to DAP-only connect → Phase 1
    After connect, Record Read 0xF844 for actual slot layout
