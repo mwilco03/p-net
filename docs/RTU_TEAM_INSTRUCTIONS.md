@@ -15,7 +15,7 @@ failures originate from the controller's wire encoding (documented separately).
 
 This document covers:
 1. Items the RTU team must verify/maintain for connection success
-2. A new `/slots` HTTP endpoint (fallback mechanism, lowest priority)
+2. The `/api/v1/slots` HTTP endpoint (fallback mechanism, lowest priority)
 3. GSDML consistency checks
 4. Operational concerns
 

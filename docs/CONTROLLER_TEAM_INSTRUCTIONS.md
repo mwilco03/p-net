@@ -296,18 +296,22 @@ should ship with (or fetch) this file — it does NOT need an HTTP API.
 
 The GSDML defines these module types as usable in slots 1-246:
 
-| Module | Ident | Submodule Ident | Direction | Data Size |
-|--------|-------|-----------------|-----------|-----------|
-| pH | 0x00000010 | 0x00000011 | INPUT | 5 bytes |
-| TDS | 0x00000020 | 0x00000021 | INPUT | 5 bytes |
-| Turbidity | 0x00000030 | 0x00000031 | INPUT | 5 bytes |
-| Temperature | 0x00000040 | 0x00000041 | INPUT | 5 bytes |
-| Flow | 0x00000050 | 0x00000051 | INPUT | 5 bytes |
-| Level | 0x00000060 | 0x00000061 | INPUT | 5 bytes |
-| Generic AI | 0x00000070 | 0x00000071 | INPUT | 5 bytes |
-| Pump | 0x00000100 | 0x00000101 | OUTPUT | 4 bytes |
-| Valve | 0x00000110 | 0x00000111 | OUTPUT | 4 bytes |
-| Generic DO | 0x00000120 | 0x00000121 | OUTPUT | 4 bytes |
+| Module | Ident (hex) | Ident (dec) | Submodule (hex) | Submodule (dec) | Direction | Data Size |
+|--------|-------------|-------------|-----------------|-----------------|-----------|-----------|
+| pH | 0x00000010 | 16 | 0x00000011 | 17 | INPUT | 5 bytes |
+| TDS | 0x00000020 | 32 | 0x00000021 | 33 | INPUT | 5 bytes |
+| Turbidity | 0x00000030 | 48 | 0x00000031 | 49 | INPUT | 5 bytes |
+| Temperature | 0x00000040 | 64 | 0x00000041 | 65 | INPUT | 5 bytes |
+| Flow | 0x00000050 | 80 | 0x00000051 | 81 | INPUT | 5 bytes |
+| Level | 0x00000060 | 96 | 0x00000061 | 97 | INPUT | 5 bytes |
+| Generic AI | 0x00000070 | 112 | 0x00000071 | 113 | INPUT | 5 bytes |
+| Pump | 0x00000100 | 256 | 0x00000101 | 257 | OUTPUT | 4 bytes |
+| Valve | 0x00000110 | 272 | 0x00000111 | 273 | OUTPUT | 4 bytes |
+| Generic DO | 0x00000120 | 288 | 0x00000121 | 289 | OUTPUT | 4 bytes |
+
+**Note**: Hex values are used in C code (`gsdml_modules.h` defines) and GSDML.
+Decimal values appear in the HTTP `/api/v1/slots` JSON response and the SQLite
+database. They are the same numbers: `0x10 == 16`, `0x100 == 256`.
 
 ### Building ExpectedSubmoduleBlockReq
 
@@ -488,6 +492,12 @@ Identify Response and connects to whatever IP is reported.
 Relevant code: `web/api/app/services/dcp_discovery.py` — DCP response parsing
 extracts `device.ip_address` from the DCP response block (DCP_OPTION_IP).
 
+**ACTION**: The Water-Controller repo's `CLAUDE.md` connection sequence diagram
+shows "DCP Set (assign IP address)" at step 2. This contradicts the design
+agreement. Update the diagram to show DCP Identify only — the controller
+discovers the RTU's existing IP, it does not assign one. Remove or annotate
+step 2 to read: "DCP Identify Response (read IP — do NOT use DCP Set)."
+
 ---
 
 ## Station Name Handling
@@ -501,6 +511,10 @@ MAC). The controller discovers it and uses it as-is.
 The DCP Identify Response contains the station name in
 DCP_OPTION_DEVICE / DCP_SUBOPTION_DEVICE_NAME. The controller parses this
 at `dcp_discovery.py:175-180` and stores it as the RTU identifier.
+
+**ACTION**: Same as the DHCP note above — remove DCP Set-Name from the
+Water-Controller `CLAUDE.md` connection sequence. The controller reads the
+station name from DCP Identify Response, it does not write one.
 
 ---
 
