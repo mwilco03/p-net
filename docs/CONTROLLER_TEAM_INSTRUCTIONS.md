@@ -241,12 +241,28 @@ These match the RTU code in `profinet_manager.c:885-919` and the GSDML.
 DAP has no IO data (PNET_DIR_NO_IO, input_size=0, output_size=0).
 IOCRBlockReq still required but with minimal data lengths:
 
-- Input IOCR: `data_length` = 40 (minimum: IOCS/IOPS overhead only)
+- Input IOCR: `data_length` = 40 (minimum c_sdu_length for RT_CLASS_1)
 - Output IOCR: `data_length` = 40
 
+**Note**: The wire field `data_length` in IOCRBlockReq maps directly to p-net's
+internal `c_sdu_length` field (`pf_block_reader.c:438`). No transformation.
+The 40-byte minimum is the PROFINET spec floor for RT_CLASS_1/2/3 frames,
+enforced at `pf_cmdev.c:3095-3102`. DAP's actual IO payload is 0 bytes —
+the frame is padded to 40.
+
 Frame IDs:
-- Input: 0xC001 (RT_CLASS_1 input range)
-- Output: 0x8001 (RT_CLASS_1 output range)
+- Input: 0xC001 (RT_CLASS_1 range: 0xC000-0xF7FF, validated at `pf_cmdev.c:3136`)
+- Output: 0xFFFF (let device assign from 0xC000-0xF7FF via `pf_cmdev.c:4680`)
+
+**CORRECTION**: The previous version listed Output=0x8001. That's wrong.
+0x8000-0xBBFF is the RT_CLASS_2 range. For RT_CLASS_1, both input and output
+use 0xC000-0xF7FF. The standard practice for OUTPUT IOCR is to send 0xFFFF
+and let the device (p-net) assign a frame_id from the valid range. p-net does
+this in `pf_cmdev_fix_frame_id()` at `pf_cmdev.c:4660-4698`.
+
+The pcap values (0x8002/0x8003) were also wrong — same problem, RT_CLASS_2
+range used for RT_CLASS_1. p-net validates INPUT frame_id at
+`pf_cmdev.c:3132-3149` and would reject 0x8002.
 
 ### IOCRBlockReq API entries
 
