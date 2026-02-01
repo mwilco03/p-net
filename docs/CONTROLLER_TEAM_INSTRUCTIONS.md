@@ -307,8 +307,8 @@ Open-source codebases that implement PROFINET controller or device connectivity:
 
 ### How vendor_id is set in p-net code
 
-The application passes vendor_id and device_id at init via `pnet_cfg_t`
-(`include/pnet_api.h:1230-1236`):
+The RTU application passes vendor_id and device_id to p-net once at startup
+via the `pnet_cfg_t` struct (`include/pnet_api.h:1230-1236`):
 
 ```c
 typedef struct pnet_cfg_device_id {
@@ -319,44 +319,94 @@ typedef struct pnet_cfg_device_id {
 } pnet_cfg_device_id_t;
 ```
 
-Stored into `net->fspm_cfg.device_id` and copied to
-`net->cmina_nonvolatile_dcp_ase.device_id` at `pf_cmina.c:194`.
-
-p-net's test suite uses sample values (`test/utils_for_testing.cpp:484-491`):
+The struct is a member of `pnet_cfg_t` (`include/pnet_api.h:1370-1371`):
 ```c
-pnet_default_cfg.device_id.vendor_id_hi = 0xfe;
+pnet_cfg_device_id_t device_id;
+pnet_cfg_device_id_t oem_device_id;
+```
+
+At init, `pf_cmina_init()` copies it into the DCP ASE (`pf_cmina.c:194`):
+```c
+net->cmina_nonvolatile_dcp_ase.device_id = p_cfg->device_id;
+```
+
+From that point forward, the values live at two locations:
+- `net->fspm_cfg.device_id` — the original config, never modified
+- `net->cmina_current_dcp_ase.device_id` — the active DCP copy
+
+**The RTU (`rtu-4b64`) reports these values via DCP Identify Response**
+(from `new.txt` lines 103-109):
+```
+VendorID: 0x0493
+DeviceID: 0x0001
+```
+
+So the Water-treat application calls `pnet_init()` with:
+```c
+cfg.device_id.vendor_id_hi = 0x04;
+cfg.device_id.vendor_id_lo = 0x93;
+cfg.device_id.device_id_hi = 0x00;
+cfg.device_id.device_id_lo = 0x01;
+```
+
+p-net's test suite uses different sample values
+(`test/utils_for_testing.cpp:484-491`):
+```c
+pnet_default_cfg.device_id.vendor_id_hi = 0xfe;  /* 0xFEED */
 pnet_default_cfg.device_id.vendor_id_lo = 0xed;
-pnet_default_cfg.device_id.device_id_hi = 0xbe;
+pnet_default_cfg.device_id.device_id_hi = 0xbe;  /* 0xBEEF */
 pnet_default_cfg.device_id.device_id_lo = 0xef;
 ```
 
+These are test-only values — the test suite also sets station_name to `""`,
+product_name to `"PNET unit tests"`, and IP to `192.168.1.171`. The full
+test config is at `test/utils_for_testing.cpp:464-539`.
+
 ### Where vendor_id/device_id are used in p-net
 
-| Location | What it does |
-|----------|-------------|
-| `pf_cmina.c:194` | Copies from config into DCP ASE for DCP Identify responses |
-| `pf_cmina.c:1156` | Returns vendor/device ID in DCP Get responses (option 0x02, suboption 0x03) |
-| `pf_cmrpc_epm.c:228-236` | Fills Object UUID last 6 bytes in EPM Lookup Response |
+Three places, all outbound (p-net sends these values TO the controller,
+never checks them FROM the controller):
+
+| Location | Direction | What it does |
+|----------|-----------|-------------|
+| `pf_cmina.c:194` | Outbound | Copies from config into DCP ASE. Returned in DCP Identify and DCP Get responses (option 0x02, suboption 0x03) at `pf_cmina.c:1156`. |
+| `pf_cmrpc_epm.c:228-236` | Outbound | Fills the last 6 bytes (node field) of the Object UUID in EPM Lookup Response. Format: `DEA00000-6C97-11D1-8271-{instance 00 01}{device_id}{vendor_id}`. |
+| `pf_block_writer.c:2326-2327` | Outbound | Writes `im_vendor_id_hi/lo` into I&M0 (Identification & Maintenance) record data. This is the IM_0 data, separate from the device_id config. |
 
 ### Where vendor_id/device_id are NOT used
 
-**The connect request validation chain does NOT check vendor_id or device_id.**
+**The connect request validation chain does NOT check vendor_id or device_id
+from the incoming packet against the device's own configured values.**
 
-`pf_cmdev_check_ar_param()` at `pf_cmdev.c:1674-1814` validates:
-ar_type, ar_uuid, mac, CMInitiatorObjectUUID prefix, ar_properties,
-timeout_factor, station_name length, station_name chars.
+`pf_cmdev_check_ar_param()` at `pf_cmdev.c:1674-1814` validates these
+fields in order (see Test Cases below for details):
+
+1. ar_type (must be IOCAR_SINGLE)
+2. ar_uuid (must be non-zero)
+3. mac (must not be multicast)
+4. CMInitiatorObjectUUID (prefix only — see below)
+5. ar_properties.state (must be Active)
+6. parameterization_server (must not be External)
+7. companion_ar (must not be 3)
+8. activity_timeout_factor (1-1000)
+9. station_name length and visible chars
 
 None of these compare anything against `net->fspm_cfg.device_id`.
 
 The CMInitiatorObjectUUID check (`pf_cmdev.c:1602-1615`) validates only the
-10-byte prefix `DEA00000-6C97-11D1-8271-`. The last 6 bytes (instance,
-device_id, vendor_id) are **not checked** against the device's own config.
+first 10 bytes: `data1 == 0xDEA00000`, `data2 == 0x6C97`, `data3 == 0x11D1`,
+`data4[0] == 0x82`, `data4[1] == 0x71`. The last 6 bytes (instance,
+device_id, vendor_id encoded in the UUID node field) are **not checked**.
+Any values pass.
 
-The RPC header Object UUID is not validated for Connect requests. Only the
-Interface UUID is checked for routing at `pf_cmrpc.c:4690`.
+The RPC header Object UUID (offset 8-23) is not validated for Connect
+requests at all. p-net only checks the Interface UUID for routing at
+`pf_cmrpc.c:4690-4694`.
 
-**Nothing in p-net prevents sample vendor_id `0xFEED` or device_id `0xBEEF`
-from connecting.** These values are only reported back in DCP and EPM responses.
+**Nothing in p-net prevents sample vendor_id `0xFEED` / device_id `0xBEEF`
+or production values `0x0493` / `0x0001` from connecting.** These values
+are only sent outbound in DCP, EPM, and I&M responses — never validated
+on inbound Connect requests.
 
 ---
 
