@@ -289,29 +289,89 @@ issues were found and fixed on the RTU side (Water-treat repo):
 
 ---
 
-## Reference Implementation Guide
+## Reference Implementations
 
-This section provides field-by-field wire format details derived from analyzing
-every open-source PROFINET controller implementation available. Code references
-to both p-net (device side, this repo) and public implementations are included.
+Open-source codebases that implement PROFINET controller or device connectivity:
 
-**Reference codebases reviewed:**
-
-| Repo | Language | What it implements |
-|------|----------|--------------------|
-| [secdev/scapy `pnio_rpc.py`](https://github.com/secdev/scapy/blob/master/scapy/contrib/pnio_rpc.py) | Python | Full block definitions for every PNIO block type. Most complete wire-format reference. |
-| [alfredkrohmer/profinet](https://github.com/alfredkrohmer/profinet) | Python | Sends ARBlockReq-only Connect. Shows Object UUID construction from vendor/device ID. |
-| [Wireshark `packet-dcerpc-pn-io.c`](https://github.com/boundary/wireshark/blob/master/plugins/profinet/packet-dcerpc-pn-io.c) | C | Dissector with full block type table, UUID constants, validation checks. |
-| [DCE 1.1 RPC Spec, Chapter 12](https://pubs.opengroup.org/onlinepubs/9629399/chap12.htm) | Spec | Connectionless PDU header format, UUID encoding rules per DREP. |
+| Repo | Language | What it does | Link |
+|------|----------|-------------|------|
+| secdev/scapy `pnio_rpc.py` | Python | Full block definitions for every PNIO block type. Most complete wire-format reference. | [source](https://github.com/secdev/scapy/blob/master/scapy/contrib/pnio_rpc.py) |
+| secdev/scapy `pnio_rpc.uts` | Python | Test suite with a complete Connect request built from blocks | [tests](https://github.com/secdev/scapy/blob/master/test/contrib/pnio_rpc.uts) |
+| alfredkrohmer/profinet | Python | Sends Connect with ARBlockReq. Shows Object UUID construction from vendor/device ID. | [source](https://github.com/alfredkrohmer/profinet) |
+| Wireshark `packet-dcerpc-pn-io.c` | C | Dissector with full block type table, UUID constants, validation logic. | [source](https://github.com/boundary/wireshark/blob/master/plugins/profinet/packet-dcerpc-pn-io.c) |
+| DCE 1.1 RPC Spec, Chapter 12 | Spec | Connectionless PDU header format, UUID encoding rules per DREP. | [spec](https://pubs.opengroup.org/onlinepubs/9629399/chap12.htm) |
 
 ---
 
-### Critical: CMInitiatorObjectUUID Format
+## p-net Vendor ID / Device ID Review
 
-p-net **rejects** the Connect request if the `CMInitiatorObjectUUID` inside the
-ARBlockReq does not match the PROFINET Object UUID prefix.
+### How vendor_id is set in p-net code
 
-**p-net validation** (`pf_cmdev.c:1602-1615`):
+The application passes vendor_id and device_id at init via `pnet_cfg_t`
+(`include/pnet_api.h:1230-1236`):
+
+```c
+typedef struct pnet_cfg_device_id {
+   uint8_t vendor_id_hi;
+   uint8_t vendor_id_lo;
+   uint8_t device_id_hi;
+   uint8_t device_id_lo;
+} pnet_cfg_device_id_t;
+```
+
+Stored into `net->fspm_cfg.device_id` and copied to
+`net->cmina_nonvolatile_dcp_ase.device_id` at `pf_cmina.c:194`.
+
+p-net's test suite uses sample values (`test/utils_for_testing.cpp:484-491`):
+```c
+pnet_default_cfg.device_id.vendor_id_hi = 0xfe;
+pnet_default_cfg.device_id.vendor_id_lo = 0xed;
+pnet_default_cfg.device_id.device_id_hi = 0xbe;
+pnet_default_cfg.device_id.device_id_lo = 0xef;
+```
+
+### Where vendor_id/device_id are used in p-net
+
+| Location | What it does |
+|----------|-------------|
+| `pf_cmina.c:194` | Copies from config into DCP ASE for DCP Identify responses |
+| `pf_cmina.c:1156` | Returns vendor/device ID in DCP Get responses (option 0x02, suboption 0x03) |
+| `pf_cmrpc_epm.c:228-236` | Fills Object UUID last 6 bytes in EPM Lookup Response |
+
+### Where vendor_id/device_id are NOT used
+
+**The connect request validation chain does NOT check vendor_id or device_id.**
+
+`pf_cmdev_check_ar_param()` at `pf_cmdev.c:1674-1814` validates:
+ar_type, ar_uuid, mac, CMInitiatorObjectUUID prefix, ar_properties,
+timeout_factor, station_name length, station_name chars.
+
+None of these compare anything against `net->fspm_cfg.device_id`.
+
+The CMInitiatorObjectUUID check (`pf_cmdev.c:1602-1615`) validates only the
+10-byte prefix `DEA00000-6C97-11D1-8271-`. The last 6 bytes (instance,
+device_id, vendor_id) are **not checked** against the device's own config.
+
+The RPC header Object UUID is not validated for Connect requests. Only the
+Interface UUID is checked for routing at `pf_cmrpc.c:4690`.
+
+**Nothing in p-net prevents sample vendor_id `0xFEED` or device_id `0xBEEF`
+from connecting.** These values are only reported back in DCP and EPM responses.
+
+---
+
+## Test Cases
+
+Each test case is a verifiable check against the reference implementations.
+For each one: review the Water-Controller code, compare against the reference,
+and verify on wire with a pcap.
+
+### Test 1: CMInitiatorObjectUUID prefix
+
+The `CMInitiatorObjectUUID` field inside ARBlockReq (16 bytes at offset 132
+of the connect request) must have the PROFINET Object UUID prefix.
+
+**p-net code** (`pf_cmdev.c:1602-1615`):
 ```c
 static int pf_cmdev_check_cm_initiator_object_uuid (const pf_uuid_t * p_uuid)
 {
@@ -327,248 +387,135 @@ static int pf_cmdev_check_cm_initiator_object_uuid (const pf_uuid_t * p_uuid)
 }
 ```
 
-If this check fails, p-net returns error code 8 (`FAULTY_AR_BLOCK_REQ`)
-at `pf_cmdev.c:1714-1724`.
+Fails with error code 8 (`FAULTY_AR_BLOCK_REQ`) at `pf_cmdev.c:1714-1724`.
 
-**What Water-Controller currently does** (`ar_manager.c` / `profinet_rpc.c`):
-```c
-/* ar_manager_init() — generates random UUID4 once */
-rpc_generate_uuid(mgr->controller_uuid);
-
-/* rpc_build_connect_request() — writes it as CMInitiatorObjectUUID */
-memcpy(buffer + pos, params->controller_uuid, 16);  pos += 16;
-```
-
-`rpc_generate_uuid()` produces `XXXXXXXX-XXXX-4XXX-8XXX-XXXXXXXXXXXX` —
-a random UUID4 where `data1 != 0xDEA00000`. p-net rejects this.
-
-**Required format** (from Scapy `pnio_rpc.py` and alfredkrohmer `rpc.py`):
-```
-DEA00000-6C97-11D1-8271-{instance_hi}{instance_lo}{device_hi}{device_lo}{vendor_hi}{vendor_lo}
-```
-
-The last 6 bytes of the UUID encode the **controller's** identity:
-
-| Bytes | Field | Size | Source |
-|-------|-------|------|--------|
-| 10-11 | Instance number | uint16 BE | Controller instance (typically 0x0001) |
-| 12-13 | Device ID | uint16 BE | Controller's own device ID |
-| 14-15 | Vendor ID | uint16 BE | Controller's own vendor ID |
-
-**Fix** — replace `rpc_generate_uuid()` for `controller_uuid` with:
-```c
-/* Water-Controller: profinet_rpc.c or ar_manager.c */
-static void build_controller_object_uuid(uint8_t *uuid,
-                                          uint16_t instance,
-                                          uint16_t device_id,
-                                          uint16_t vendor_id)
-{
-    /* Fixed PROFINET Object UUID prefix (10 bytes) */
-    static const uint8_t prefix[10] = {
-        0xDE, 0xA0, 0x00, 0x00,  /* data1: DEA00000 */
-        0x6C, 0x97,              /* data2: 6C97 */
-        0x11, 0xD1,              /* data3: 11D1 */
-        0x82, 0x71               /* data4[0..1] */
-    };
-    memcpy(uuid, prefix, 10);
-    uuid[10] = (uint8_t)(instance >> 8);
-    uuid[11] = (uint8_t)(instance & 0xFF);
-    uuid[12] = (uint8_t)(device_id >> 8);
-    uuid[13] = (uint8_t)(device_id & 0xFF);
-    uuid[14] = (uint8_t)(vendor_id >> 8);
-    uuid[15] = (uint8_t)(vendor_id & 0xFF);
-}
-
-/* In ar_manager_init(): */
-build_controller_object_uuid(mgr->controller_uuid,
-    0x0001,           /* instance */
-    CONTROLLER_DEVICE_ID,
-    CONTROLLER_VENDOR_ID);
+**Scapy reference** (`pnio_rpc.uts` line 596):
+```python
+CMInitiatorObjectUUID='dea00000-6c97-11d1-8271-010203040506'
 ```
 
 **alfredkrohmer/profinet reference** (`rpc.py`):
 ```python
 OBJECT_UUID_PREFIX = bytes([0xDE,0xA0,0x00,0x00,0x6C,0x97,0x11,0xD1,0x82,0x71])
-# Last 6 bytes: instance(2) + device_id(2) + vendor_id(2)
 object_uuid = OBJECT_UUID_PREFIX + bytes([0x00, 0x01,
     self.info.devHigh, self.info.devLow,
     self.info.vendorHigh, self.info.vendorLow])
 ```
 
-**Scapy reference** (`pnio_rpc.py` test, line 596):
+Last 6 bytes encode: instance (2 bytes BE) + device_id (2 bytes BE) +
+vendor_id (2 bytes BE). p-net does not validate these bytes — any values pass.
+
+**Verify**: In pcap, bytes at offset 132-141 of the connect request (after
+RPC header + NDR) must be `DE A0 00 00 6C 97 11 D1 82 71`. Bytes 142-147
+are free (instance/device/vendor of the controller).
+
+---
+
+### Test 2: RPC header Object UUID prefix
+
+The Object UUID in the RPC header (offset 8-23, 16 bytes) uses the same
+`DEA00000` prefix. p-net does not validate this field for Connect — only the
+Interface UUID is checked at `pf_cmrpc.c:4690` — but every reference
+implementation uses this format.
+
+**Scapy reference** (`pnio_rpc.uts` line 594):
 ```python
-CMInitiatorObjectUUID='dea00000-6c97-11d1-8271-010203040506'
+DceRpc4(
+  object='dea00000-6c97-11d1-8271-010203040506',
+  ...
+)
 ```
 
-**NOTE**: The RPC header's Object UUID (offset 8-23 in the 80-byte header)
-should ALSO use this same `DEA00000` prefix format. p-net does not validate
-the RPC header Object UUID for Connect requests (only the Interface UUID
-is checked for routing at `pf_cmrpc.c:4690`), but standard practice is to
-set both to the same value.
-
----
-
-### p-net AR Param Validation Chain
-
-After the Interface UUID matches and the ARBlockReq is parsed, p-net validates
-every field in sequence at `pf_cmdev_check_ar_param()` (`pf_cmdev.c:1674-1800`).
-A failure at any step returns a Connect Response with the error code shown.
-The controller MUST pass all of these:
-
-| Order | Check | Error Code | p-net Location | What Water-Controller must send |
-|-------|-------|------------|----------------|-------------------------------|
-| 1 | `ar_type == IOCAR_SINGLE (1)` | ARBlockReq/4 | `pf_cmdev.c:1678` | `write_u16_be(buffer, 0x0001, &pos)` |
-| 2 | `ar_uuid != all-zeros` | ARBlockReq/5 | `pf_cmdev.c:1689` | Any non-zero UUID (random is fine) |
-| 3 | `mac_addr bit 0 == 0` (not multicast) | ARBlockReq/7 | `pf_cmdev.c:1703` | Controller's real unicast MAC |
-| 4 | `cm_initiator_object_uuid` prefix = `DEA00000-6C97-11D1-8271-` | ARBlockReq/8 | `pf_cmdev.c:1714` | See fix above |
-| 5 | `ar_properties.state == ACTIVE (1)` | ARBlockReq/9 | `pf_cmdev.c:1726` | Set bits 0-2 of ARProperties = 0x1 |
-| 6 | `parameterization_server != EXTERNAL` | ARBlockReq/10 | `pf_cmdev.c:1737` | Set bit 4 of ARProperties = 1 (CM_Initiator) |
-| 7 | `station_name` matches device's own name | ARBlockReq/14 | `pf_cmdev.c:1791` | Must equal DCP-discovered name |
-
-**ARProperties** is a uint32 (big-endian in block body). The required value
-for a standard IOCAR_SINGLE with CM_Initiator parameterization:
-
-```
-Bit layout (MSB to LSB):
-  [31]    PullModuleAlarmAllowed = 0
-  [30]    StartupMode            = 0 (Legacy) or 1 (Advanced)
-  [29:24] Reserved               = 0
-  [23:12] Reserved               = 0
-  [11]    AcknowledgeCompanionAR = 0
-  [10:9]  CompanionAR            = 0 (Single_AR)
-  [8]     DeviceAccess           = 0 (ExpectedSubmodule)
-  [7:5]   Reserved               = 0
-  [4]     ParametrizationServer  = 1 (CM_Initiator)  ← REQUIRED
-  [3]     SupervisorTakeoverAllowed = 0
-  [2:0]   State                  = 1 (Active)         ← REQUIRED
-
-Minimum correct value: 0x00000011  (CM_Initiator + Active)
+**alfredkrohmer/profinet** (`rpc.py`):
+```python
+object_uuid = OBJECT_UUID_PREFIX + bytes([0x00, 0x01,
+    self.info.devHigh, self.info.devLow,
+    self.info.vendorHigh, self.info.vendorLow])
 ```
 
-**Scapy reference** (`pnio_rpc.py:776-817`): ARBlockReq fields_desc shows exact
-bit layout. Default `ARProperties_State=1`, `ARProperties_ParametrizationServer`
-must be set to `"CM_Initator"` (1).
-
----
-
-### Two Endianness Layers
-
-The connect request has two byte-ordering domains. Getting these wrong causes
-either silent drop (RPC header) or block parse errors (PNIO blocks).
-
-**Layer 1: RPC header (80 bytes) — endianness per DREP**
-
-DREP `0x10` = little-endian. All multi-byte integer fields in the header
-(`server_boot`, `interface_version`, `sequence_number`, `opnum`,
-`fragment_length`, etc.) are LE. UUID fields `data1`/`data2`/`data3` are
-LE; `data4` (8 bytes) is always BE (byte array, not integer).
-
-Water-Controller uses direct struct assignment on an LE platform, which is
-correct. The `_Static_assert` at compile time enforces this (Bug 0.3).
-
-**Layer 2: PNIO block content — ALWAYS big-endian**
-
-After the NDR header, p-net switches to big-endian parsing at
-`pf_cmrpc.c:4636`:
+p-net's own EPM response builder uses this format (`pf_cmrpc_epm.c:218-236`):
 ```c
-/* From now on all is big-endian */
-p_sess->get_info.is_big_endian = true;
+memcpy(&p_lookup_rsp->rpc_entry.object_uuid,
+       &uuid_io_object_instance, ...);  /* DEA00000-6C97-11D1-8271-... */
+p_lookup_rsp->rpc_entry.object_uuid.node[0] = 0x00;
+p_lookup_rsp->rpc_entry.object_uuid.node[1] = 0x01;
+p_lookup_rsp->rpc_entry.object_uuid.node[2] = net->fspm_cfg.device_id.device_id_hi;
+p_lookup_rsp->rpc_entry.object_uuid.node[3] = net->fspm_cfg.device_id.device_id_lo;
+p_lookup_rsp->rpc_entry.object_uuid.node[4] = net->fspm_cfg.device_id.vendor_id_hi;
+p_lookup_rsp->rpc_entry.object_uuid.node[5] = net->fspm_cfg.device_id.vendor_id_lo;
 ```
 
-All block headers (`block_type`, `block_length`, `version`) and all fields
-inside ARBlockReq, IOCRBlockReq, ExpectedSubmoduleBlockReq, AlarmCRBlockReq
-are big-endian. Water-Controller uses `write_u16_be()` and `write_u32_be()`
-for these, which is correct.
+With DREP=0x10 (LE), data1/data2/data3 are byte-swapped on wire.
 
-**Layer 1.5: NDR wrapper (20 bytes) — endianness per DREP**
-
-The 5x uint32 NDR fields are encoded per DREP (LE with DREP=0x10), NOT
-big-endian. p-net parses them at `pf_block_reader.c:836-865` using the
-RPC header's `is_big_endian` flag (which is false for DREP=0x10).
-
-Water-Controller's `write_ndr_request_header()` must write these as LE.
-If it currently uses `write_u32_be()` for NDR, that is wrong.
-
-**Summary of endianness per section:**
-
-| Section | Offset | Endianness | Water-Controller function |
-|---------|--------|------------|--------------------------|
-| RPC header | 0-79 | LE (per DREP=0x10) | Direct struct assignment (LE platform) |
-| NDR wrapper | 80-99 | LE (per DREP=0x10) | Must use LE writes |
-| PNIO blocks | 100+ | Always BE | `write_u16_be()`, `write_u32_be()` |
+**Verify**: At pcap offset 8, first 4 bytes should be `00 00 A0 DE` (data1
+`0xDEA00000` in LE), then `97 6C` (data2 LE), then `D1 11` (data3 LE),
+then `82 71` (data4, always BE).
 
 ---
 
-### UUID Wire Encoding Per DREP
+### Test 3: ARProperties bit field
 
-In the RPC header (Layer 1), UUIDs have mixed encoding per DCE 1.1 spec:
+ARProperties is a uint32 BE at offset 148 of the connect request.
 
+**p-net checks** (`pf_cmdev.c:1726-1768`):
+- Bits 0-2 (`state`) must be 1 (Active) — error code 9
+- Bit 4 (`parameterization_server`) must be 1 (CM_Initiator) — error code 9
+- Bits 10-9 (`companion_ar`) must not be 3 — error code 9
+
+**Scapy reference** (`pnio_rpc.py:776-817`):
+```python
+class ARBlockReq(Block):
+    fields_desc = [
+        ...
+        BitField("ARProperties_PullModuleAlarmAllowed", 0, 1),    # bit 31
+        BitEnumField("ARProperties_StartupMode", 0, 1, ...),      # bit 30
+        BitField("ARProperties_reserved_3", 0, 6),                 # bits 29-24
+        BitField("ARProperties_reserved_2", 0, 12),                # bits 23-12
+        BitField("ARProperties_AcknowledgeCompanionAR", 0, 1),    # bit 11
+        BitEnumField("ARProperties_CompanionAR", 0, 2, ...),      # bits 10-9
+        BitEnumField("ARProperties_DeviceAccess", 0, 1, ...),     # bit 8
+        BitField("ARProperties_reserved_1", 0, 3),                 # bits 7-5
+        BitEnumField("ARProperties_ParametrizationServer", 0, 1,...), # bit 4
+        BitField("ARProperties_SupervisorTakeoverAllowed", 0, 1), # bit 3
+        BitEnumField("ARProperties_State", 1, 3, {1: "Active"}),  # bits 2-0
+    ]
 ```
-UUID struct:
-  data1  (uint32)  → LE with DREP=0x10
-  data2  (uint16)  → LE with DREP=0x10
-  data3  (uint16)  → LE with DREP=0x10
-  data4  (8 bytes) → always big-endian (byte array)
-```
 
-**Example: Interface UUID `DEA00001-6C97-11D1-8271-00A02442DF7D`**
+Minimum correct value: `0x00000011` (bit 4 = 1, bits 0-2 = 1).
 
-```
-LE wire bytes:  01 00 A0 DE  97 6C  D1 11  82 71 00 A0 24 42 DF 7D
-                ^^^^^^^^^^^  ^^^^^  ^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^
-                data1 (LE)   d2(LE) d3(LE) data4 (always BE)
-```
-
-p-net's parser (`pf_block_reader.c:150-158`) reads these back with
-DREP-aware `pf_get_uint32()`/`pf_get_uint16()`, reconstructing
-`{0xDEA00001, 0x6C97, 0x11D1, ...}` in host order.
-
-Water-Controller's `uuid_swap_fields()` (`rpc_strategy.c`) correctly swaps
-data1/data2/data3 byte order for LE wire encoding. The rule:
-- **Object UUID**: swap (session-specific, generated in host order)
-- **Activity UUID**: swap (session-specific, generated in host order)
-- **Interface UUID**: do NOT swap (Bug 0.6 — constants are stored as
-  big-endian byte arrays, not host-order integers)
+**Verify**: At pcap offset 148, bytes should be `00 00 00 11` (or with
+StartupMode bit 30 set: `40 00 00 11`).
 
 ---
 
-### No Inter-Block Padding
+### Test 4: AlarmCRBlockReq VLAN priority tags
 
-Blocks are concatenated directly with zero padding between them.
-
-**Scapy evidence** (`pnio_rpc.py` test hex, lines 683-697):
-```
-...706c632d31  0102003e...
-   ^^^^^^^^^^  ^^^^^^^^
-   end of ARBlockReq    start of IOCRBlockReq (no gap)
-   "plc-1"             block_type=0x0102
+**p-net check** (`pf_cmdev.c:4088-4098`):
+```c
+if (p_ar->alarm_cr_request.alarm_cr_tag_header_high.alarm_user_priority != 6)
+   /* error code 11 */
 ```
 
-**p-net evidence** — the block parsing loop at `pf_cmrpc.c:1231-1704`
-reads the next `pf_get_block_header()` immediately after each block
-handler finishes. No alignment skip between iterations.
+**Scapy reference** (`pnio_rpc.py:1133-1169`):
+```python
+class AlarmCRBlockReq(Block):
+    fields_desc = [
+        ...
+        ShortField("AlarmCRTagHeaderHigh", 0xC000),  # VLAN prio 6
+        ShortField("AlarmCRTagHeaderLow", 0xA000),   # VLAN prio 5
+    ]
+```
 
-**p-net's own response writer** (`pf_cmrpc.c:1840-1855`) writes
-ARBlockRes then IOCRBlockRes back-to-back with no padding.
-
-Water-Controller's `align_to_4(&pos)` between blocks writes zero-fill
-padding. This does NOT prevent connections — p-net tolerates it for some
-block boundaries. But for clean wire format, consider removing it.
-The `align_to_4()` WITHIN blocks (before block_length calculation) is
-handled by Bug 0.1/0.5 fixes.
+**Verify**: In AlarmCRBlockReq, last 4 bytes must be `C0 00 A0 00`.
 
 ---
 
-### block_length Formula
+### Test 5: block_length calculation
 
-```
-block_length = total_block_bytes - 4
-```
+`block_length = total_block_bytes - 4`. Excludes block_type (2) and
+block_length (2). Includes version_high (1) + version_low (1) + data.
 
-The 4 excluded bytes are `block_type` (2) + `block_length` (2).
-Everything from `block_version_high` onward is counted.
-
-**Scapy** (`pnio_rpc.py:347-352`):
+**Scapy reference** (`pnio_rpc.py:347-352`):
 ```python
 def post_build(self, p, pay):
     if self.block_length is None:
@@ -578,32 +525,30 @@ def post_build(self, p, pay):
 
 **p-net validation** (`pf_cmrpc.c:1176`):
 ```c
-if (p_block_header->block_length != block_length)  /* Reject mismatch */
+if (p_block_header->block_length != block_length)  /* reject */
 ```
 
-**Expected values per block type:**
+Expected values:
 
-| Block | block_length | Calculation |
-|-------|-------------|-------------|
-| ARBlockReq | `54 + strlen(station_name)` | 2 (version) + 52 (fixed) + N (name) |
-| IOCRBlockReq | Dynamic | 2 (version) + 42 (fixed) + APIs |
-| AlarmCRBlockReq | 22 (0x0016) | 2 (version) + 20 (fixed fields) |
-| ExpectedSubmoduleBlockReq | Dynamic | 2 (version) + 2 (num_apis) + APIs |
+| Block | block_length |
+|-------|-------------|
+| ARBlockReq | `54 + strlen(station_name)` |
+| AlarmCRBlockReq | 22 (`0x0016`) |
+| IOCRBlockReq | dynamic |
+| ExpectedSubmoduleBlockReq | dynamic |
+
+**Verify**: For station name "rtu-4b64" (8 chars), ARBlockReq block_length
+bytes at offset 102-103 must be `00 3E` (62).
 
 ---
 
-### NDR Wrapper Format (20 bytes)
+### Test 6: NDR wrapper endianness
 
-Between the RPC header and the first PNIO block. All uint32, LE per DREP.
+The 20-byte NDR header between RPC header and PNIO blocks uses DREP
+endianness (LE with DREP=0x10), NOT big-endian.
 
-```
-Offset  Size  Field          Value
-0       4     args_max       Max response buffer size (e.g., 1384)
-4       4     args_length    Total PNIO block bytes that follow
-8       4     max_count      = args_length
-12      4     offset         0
-16      4     actual_count   = args_length
-```
+**p-net code** (`pf_block_reader.c:836-865`): Parses NDR fields using
+the RPC header's `is_big_endian` flag, which is `false` for DREP=0x10.
 
 **p-net validation** (`pf_block_reader.c:848-854`):
 ```c
@@ -611,136 +556,138 @@ if (p_ndr->args_maximum < p_ndr->args_length ||
     p_ndr->args_maximum < p_ndr->array.maximum_count ||
     p_ndr->array.maximum_count < p_ndr->args_length ||
     p_ndr->args_length != p_ndr->array.actual_count)
-{
-   ret = -1;  /* "Invalid NDR header" */
-}
 ```
 
-Rules: `args_max >= args_length`, `max_count >= args_length`,
-`actual_count == args_length`, `offset == 0`.
+**Scapy reference** (`pnio_rpc.py:1469-1521`):
+```python
+class PNIOServiceReqPDU(Packet):
+    fields_desc = [
+        EField(
+            FieldLenField("args_max", None, fmt="I", length_of="blocks"),
+            endianness_from=dce_rpc_endianness),  # follows DREP
+        NDRData,  # args_length, max_count, offset, actual_count — all per DREP
+    ]
+```
+
+Layout (all uint32, LE):
+```
+Offset  Field          Value
+80      args_max       >= args_length
+84      args_length    total PNIO block bytes
+88      max_count      >= args_length
+92      offset         0
+96      actual_count   == args_length
+```
+
+**Verify**: If total block payload is e.g. 273 bytes (`0x111`), offset 84
+must be `11 01 00 00` (LE), NOT `00 00 01 11` (BE).
 
 ---
 
-### Complete Connect Request Wire Layout
+### Test 7: Block ordering
 
-Byte-by-byte layout of a minimal Connect request (reference from Scapy test):
+ARBlockReq must be the first PNIO block. p-net enforces this at
+`pf_cmrpc.c:1247-1257`. Remaining blocks can be in any order.
 
+**Scapy test** (`pnio_rpc.uts` lines 592-680):
+```python
+PNIOServiceReqPDU(blocks=[
+    ARBlockReq(...),           # first
+    IOCRBlockReq(InputCR),     # then IOCR
+    IOCRBlockReq(OutputCR),
+    ExpectedSubmoduleBlockReq(...),
+    # AlarmCRBlockReq(...)     # (omitted in test, required by p-net)
+])
 ```
-Offset  Size  Field
-────────────────────────────── RPC Header (80 bytes, LE per DREP) ──
-0       1     rpc_version          = 0x04
-1       1     packet_type          = 0x00 (Request)
-2       1     flags1               = 0x20 (Idempotent)
-3       1     flags2               = 0x00
-4       1     drep[0]              = 0x10 (LE, ASCII)
-5       1     drep[1]              = 0x00 (IEEE float)
-6       1     drep[2]              = 0x00 (reserved)
-7       1     serial_hi            = 0x00
-8       16    object_uuid          = DEA00000 prefix, LE-swapped data1/2/3
-24      16    interface_uuid       = DEA00001 prefix, NOT swapped (Bug 0.6)
-40      16    activity_uuid        = random, LE-swapped data1/2/3
-56      4     server_boot_time     = 0x00000000 (LE)
-60      4     interface_version    = 0x01000000 (value 1, LE)
-64      4     sequence_number      = increments (LE)
-68      2     opnum                = 0x0000 (Connect, LE)
-70      2     interface_hint       = 0xFFFF (LE)
-72      2     activity_hint        = 0xFFFF (LE)
-74      2     fragment_length      = total_after_header (LE)
-76      2     fragment_number      = 0x0000
-78      1     auth_protocol        = 0x00
-79      1     serial_lo            = 0x00
-────────────────────────────── NDR Wrapper (20 bytes, LE per DREP) ──
-80      4     args_max             (LE)
-84      4     args_length          = total block bytes (LE)
-88      4     max_count            = args_length (LE)
-92      4     offset               = 0x00000000
-96      4     actual_count         = args_length (LE)
-────────────────────────────── PNIO Blocks (all fields BE) ─────────
-100     2     block_type           = 0x0101 (ARBlockReq)
-102     2     block_length         = 54 + station_name_len
-104     1     version_high         = 0x01
-105     1     version_low          = 0x00
-106     2     ar_type              = 0x0001 (IOCAR_SINGLE)
-108     16    ar_uuid              = random non-zero UUID
-124     2     session_key          = 0x0001 (increments per connect)
-126     6     cm_initiator_mac     = controller's unicast MAC
-132     16    cm_initiator_obj_uuid = DEA00000-6C97-11D1-8271-{inst}{dev}{vend}
-148     4     ar_properties        = 0x00000011 (CM_Initiator + Active)
-152     2     activity_timeout     = 0x03E8 (1000 = 100s)
-154     2     udp_rt_port          = 0x8892
-156     2     station_name_length  = N
-158     N     station_name         = DCP-discovered name (e.g., "rtu-4b64")
-────────────────────────────── IOCRBlockReq #1 (Input CR) ──────────
-...     2     block_type           = 0x0102
-        2     block_length         = dynamic
-        1     version_high         = 0x01
-        1     version_low          = 0x00
-        2     iocr_type            = 0x0001 (Input)
-        2     iocr_reference       = 0x0001
-        2     lt                   = 0x8892
-        4     iocr_properties      = 0x00000000 (RT_CLASS_1)
-        2     data_length          = 40 (minimum) or calculated
-        2     frame_id             = 0xC001 (RT_CLASS_1 range)
-        2     send_clock_factor    = 32
-        2     reduction_ratio      = 32
-        2     phase                = 1
-        2     sequence             = 0
-        4     frame_send_offset    = 0xFFFFFFFF
-        2     watchdog_factor      = 10
-        2     data_hold_factor     = 10
-        2     iocr_tag_header      = 0xC000 (VLAN prio 6)
-        6     multicast_mac        = 00:00:00:00:00:00
-        2     number_of_apis       = 1
-        4     api                  = 0x00000000
-        2     num_io_data_objects  = (per submodules)
-        ...   io_data_objects      = slot, subslot, frame_offset (6 bytes each)
-        2     num_iocs             = (per submodules)
-        ...   iocs                 = slot, subslot, frame_offset (6 bytes each)
-────────────────────────────── IOCRBlockReq #2 (Output CR) ─────────
-...     same structure, iocr_type = 0x0002, frame_id = 0xFFFF
-────────────────────────────── ExpectedSubmoduleBlockReq ───────────
-...     2     block_type           = 0x0104
-        2     block_length         = dynamic
-        1     version_high         = 0x01
-        1     version_low          = 0x00
-        2     number_of_apis       = 1
-        4     api                  = 0x00000000
-        2     slot_number          = 0x0000 (slot 0 for DAP)
-        4     module_ident_number  = 0x00000001 (DAP)
-        2     module_properties    = 0x0000
-        2     number_of_submodules = 3 (DAP + Interface + Port)
-        ── per submodule: ──
-        2     subslot_number       = 0x0001 / 0x8000 / 0x8001
-        4     submodule_ident      = 0x00000001 / 0x00000100 / 0x00000200
-        2     submodule_properties = 0x0000 (NO_IO for DAP submodules)
-        1+    data_description     = per SubmoduleProperties_Type
-────────────────────────────── AlarmCRBlockReq ─────────────────────
-...     2     block_type           = 0x0103
-        2     block_length         = 0x0016 (22)
-        1     version_high         = 0x01
-        1     version_low          = 0x00
-        2     alarm_cr_type        = 0x0001
-        2     lt                   = 0x8892
-        4     alarm_cr_properties  = 0x00000000
-        2     rta_timeout_factor   = 0x0001
-        2     rta_retries          = 0x0003
-        2     local_alarm_ref      = 0x0001
-        2     max_alarm_data_len   = 0x00C8 (200)
-        2     tag_header_high      = 0xC000 (VLAN prio 6)
-        2     tag_header_low       = 0xA000 (VLAN prio 5)
-```
+
+p-net requires (`pf_cmdev.c:4227-4250`):
+- At least 1 Input IOCR and 1 Output IOCR (unless `device_access=true`)
+- Exactly 1 AlarmCR (unless `device_access=true`)
+
+**Verify**: First block_type after NDR must be `01 01` (ARBlockReq).
 
 ---
 
-### Files to Change in Water-Controller
+### Test 8: Blocks are concatenated with no inter-block padding
 
-| File | Change | Why |
-|------|--------|-----|
-| `src/profinet/profinet_rpc.c` or `ar_manager.c` | Replace `rpc_generate_uuid()` for `controller_uuid` with `DEA00000` prefix builder | p-net rejects random UUID4 at `pf_cmdev.c:1714` |
-| `src/profinet/profinet_rpc.c` | Verify NDR wrapper uses LE writes (not BE) | NDR follows DREP, not block endianness |
-| `src/profinet/profinet_rpc.c` | Verify ARProperties includes bits 0-2=1 (Active) and bit 4=1 (CM_Initiator) | p-net rejects at `pf_cmdev.c:1726` and `:1737` |
-| `src/profinet/profinet_rpc.c` | Verify `session_key` is non-zero and increments | Standard practice, used by p-net for AR matching |
-| `src/profinet/profinet_rpc.c` | Set RPC header Object UUID to same `DEA00000` format | Standard practice per Scapy/alfredkrohmer |
+**Scapy test hex** (`pnio_rpc.uts` lines 683-697) — blocks immediately
+follow each other:
+```
+...706c632d31 0102003e...
+              ^^^^^^^^
+   "plc-1" ends, IOCRBlockReq starts immediately (0x0102)
+```
+
+**p-net parser** (`pf_cmrpc.c:1231-1704`) — reads next block_header
+immediately after each block handler returns. No padding skip.
+
+**p-net response writer** (`pf_cmrpc.c:1840-1855`) — writes ARBlockRes
+then IOCRBlockRes back-to-back with no padding between them.
+
+**Verify**: In pcap hex dump, byte after each block's content (at
+`block_start + 4 + block_length`) is the high byte of the next block_type
+(`0x01` for request blocks).
+
+---
+
+### Test 9: Interface UUID not swapped
+
+Interface UUID constants are stored as big-endian byte arrays. With
+DREP=0x10 (LE), they go on wire WITHOUT `uuid_swap_fields()`.
+
+**p-net check** (`pf_cmrpc.c:4690-4694`):
+```c
+memcmp(&rpc_req.interface_uuid, &uuid_io_device_interface,
+       sizeof(rpc_req.object_uuid))
+```
+
+Where `uuid_io_device_interface = {0xDEA00001, 0x6C97, 0x11D1, ...}`
+(`pf_cmrpc.c:83-87`).
+
+**alfredkrohmer/profinet** uses BE DREP (0x00) — no swap needed at all:
+```python
+IFACE_UUID_DEVICE = uuid.UUID('{dea00001-6c97-11d1-8271-00a02442df7d}')
+```
+
+The Interface UUID byte arrays `PNIO_DEVICE_INTERFACE_UUID` are already in
+the form that `uuid_swap_fields()` would produce. Swapping them double-swaps.
+
+**Verify**: At pcap offset 24, bytes must be
+`01 00 A0 DE 97 6C D1 11 82 71 00 A0 24 42 DF 7D` (LE encoding of
+`DEA00001-6C97-11D1-8271-00A02442DF7D`). If you see
+`DE A0 00 01 6C 97 11 D1 ...` that is BE / double-swapped — will be
+silently dropped.
+
+---
+
+### Test 10: Activity timeout factor range
+
+**p-net check** (`pf_cmdev.c:1770-1781`):
+```c
+if ((p_ar->ar_param.cm_initiator_activity_timeout_factor < 1) ||
+    (p_ar->ar_param.cm_initiator_activity_timeout_factor > 1000))
+```
+
+Fails with error code 10. Valid range: 1-1000 (resolution: 100ms, so
+1000 = 100 seconds).
+
+**Scapy default** (`pnio_rpc.py:812`):
+```python
+ShortField("CMInitiatorActivityTimeoutFactor", 1000),
+```
+
+**Verify**: At offset 152, bytes should be between `00 01` and `03 E8` (BE).
+
+---
+
+### Test 11: Station name non-empty and visible ASCII
+
+**p-net checks** (`pf_cmdev.c:1783-1807`):
+- Length must be > 0 and < `PNET_STATION_NAME_MAX_SIZE` — error code 12
+- All chars must be visible ASCII (0x20-0x7E) — error code 13
+
+**Verify**: Station name bytes in ARBlockReq must be non-empty printable
+ASCII matching the device's DCP-discovered name.
 
 ---
 
