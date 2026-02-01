@@ -57,22 +57,21 @@ if (p_block_header->block_length != block_length)  // 64 != 62 -> FAIL
 
 Expected block_length = `54 + strlen(station_name)`.
 
-**Fix**: Calculate block_length BEFORE alignment padding, then **remove** the
-inter-block `align_to_4()` entirely:
+**Fix**: Calculate block_length BEFORE alignment padding:
 ```c
 469    size_t name_len = strlen(params->station_name);
 470    write_u16_be(buffer, (uint16_t)name_len, &pos);
 471    memcpy(buffer + pos, params->station_name, name_len);
 472    pos += name_len;
 473
-474    /* Fill AR block header — NO alignment padding after */
+474    /* Fill AR block header BEFORE adding inter-block padding */
 475    size_t ar_block_len = pos - ar_block_start - 4;
 476    size_t save_pos = ar_block_start;
 477    write_block_header(buffer, BLOCK_TYPE_AR_BLOCK_REQ,
 478                        (uint16_t)ar_block_len, &save_pos);
 479
-480    /* Next block starts immediately — do NOT call align_to_4(&pos) here.
-481     * See Bug 0.7 for why inter-block padding must not be written. */
+480    /* NOW align for next block */
+481    align_to_4(&pos);
 ```
 
 **Verification**: For station name "rtu-4b64": block_length should be
@@ -188,14 +187,20 @@ ARBlockReq. These are the last 2 bytes of CMInitiatorObjectUUID that leaked
 into the station name area. This is a consequence of Bug 0.1 — `align_to_4()`
 advances `pos` into buffer space that wasn't explicitly zeroed.
 
-**Fix**: With Bug 0.1 fixed (block_length excludes padding) and Bug 0.7
-applied (no inter-block padding), this bug is eliminated. There are no
-alignment padding bytes to contain garbage, because no alignment padding
-is written. The station name ends and the next block header begins
-immediately.
+**Fix**: After fixing Bug 0.1 (block_length before alignment), also zero the
+padding bytes:
+```c
+    pos += name_len;
 
-~~The original fix suggested zeroing padding bytes. That fix is superseded
-by Bug 0.7: do not write inter-block padding at all.~~
+    /* Calculate block_length before padding */
+    size_t ar_block_len = pos - ar_block_start - 4;
+    /* ... write block header ... */
+
+    /* Zero-fill alignment padding */
+    while (pos % 4 != 0) {
+        buffer[pos++] = 0;
+    }
+```
 
 ---
 
@@ -267,88 +272,9 @@ with `frag_len >= 20` confirms the Interface UUID matched.
 
 ---
 
-### Bug 0.7: No inter-block alignment padding (BLOCKING — UNKNOWN BLOCKS)
-
-**File**: `src/profinet/profinet_rpc.c` (every location where `align_to_4()` is
-called between blocks in the connect request builder)
-
-**Root cause**: The connect request builder calls `align_to_4(&pos)` between
-blocks (e.g., after ARBlockReq before IOCRBlockReq, after IOCRBlockReq before
-ExpectedSubmoduleBlockReq, etc.). This writes zero-fill padding bytes to make
-the next block start on a 4-byte boundary. p-net's block parser does not expect
-or skip these bytes.
-
-**Why it fails**: p-net's connect request parser (`pf_cmrpc.c:1232-1704`) loops
-through blocks by reading `pf_get_block_header()`, parsing the block content
-(which advances `*p_pos` by exactly the bytes consumed), then immediately reading
-the next block header. There is no alignment skip between iterations.
-
-p-net's own connect response writer (`pf_cmrpc.c:1840-1855`) confirms this: it
-calls `pf_put_ar_result()` then `pf_put_iocr_result()` with no padding between
-them. ARBlockRes is 34 bytes (34 % 4 = 2), yet the next block starts at byte 35.
-
-When the controller writes 2 bytes of `align_to_4` padding after a block, p-net
-reads those zeros as the next `block_type = 0x0000`. This value is not in the
-block type switch (`pf_cmrpc.c:1242`), so it hits the default case at line 1673:
-
-```c
-default:
-    LOG_DEBUG(PF_RPC_LOG, "CMRPC(%d): Unknown block type %u\n",
-        __LINE__, block_header.block_type);
-    pf_set_error(&p_sess->rpc_result, PNET_ERROR_CODE_CONNECT,
-        PNET_ERROR_DECODE_PNIO, PNET_ERROR_CODE_1_CMRPC,
-        PNET_ERROR_CODE_2_CMRPC_UNKNOWN_BLOCKS);
-```
-
-Wireshark decodes this error as: `Connect response, Error: "IODConnectRes",
-"PNIO", "CMRPC", "Unknown Blocks"`.
-
-**Example**: For station name "rtu-4b64" (8 bytes):
-- ARBlockReq total: 4 (header) + 62 (block_length) = 66 bytes
-- 66 % 4 = 2, so `align_to_4` writes 2 zero bytes
-- p-net's parser finishes ARBlockReq at byte 66, reads `block_type = 0x0000`
-  from the padding → "Unknown block type 0"
-
-**Fix**: Remove ALL `align_to_4(&pos)` calls between blocks in the connect
-request builder. Blocks are concatenated directly with no gaps. This applies to
-every block boundary, not just ARBlockReq:
-
-```c
-/* ARBlockReq */
-write_ar_block(buffer, &pos);
-/* Do NOT call align_to_4(&pos) */
-
-/* IOCRBlockReq (Input) */
-write_iocr_block(buffer, &pos, INPUT);
-/* Do NOT call align_to_4(&pos) */
-
-/* IOCRBlockReq (Output) */
-write_iocr_block(buffer, &pos, OUTPUT);
-/* Do NOT call align_to_4(&pos) */
-
-/* ExpectedSubmoduleBlockReq */
-write_expected_submodule_block(buffer, &pos);
-/* Do NOT call align_to_4(&pos) */
-
-/* AlarmCRBlockReq */
-write_alarm_cr_block(buffer, &pos);
-```
-
-**Note**: Alignment padding IS used WITHIN blocks for internal field alignment
-(e.g., per PROFINET spec, some fields must be uint32-aligned). This is fine —
-intra-block padding is counted in `block_length` and consumed by the parser.
-What must NOT exist is padding BETWEEN blocks.
-
-**Verification**: In a hex dump, the byte immediately after a block's content
-(at offset `block_start + 4 + block_length`) must be `0x01` (the high byte of
-the next block_type, since all connect request block types are `0x01xx`). If
-you see `0x00` at that position, inter-block padding is still present.
-
----
-
 ### Phase 0 Completion Summary
 
-All seven controller-side bugs have been identified. Seven additional
+All six controller-side bugs have been identified and fixed. Seven additional
 issues were found and fixed on the RTU side (Water-treat repo):
 
 | # | RTU Fix | Detail |
@@ -748,7 +674,6 @@ After each phase, verify with a packet capture:
 - [x] RPC `seqnum` increments by 1 in LE
 - [x] Interface UUID NOT byte-swapped — p-net responds (not silence)
 - [x] Strategy system retired — single correct wire format only
-- [ ] No inter-block alignment padding — byte after each block is `0x01xx` block_type, not `0x00`
 
 ### Phase 1 verification
 - [ ] RTU responds with FragLen > 20
