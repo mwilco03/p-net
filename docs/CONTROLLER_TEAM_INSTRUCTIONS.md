@@ -204,6 +204,91 @@ padding bytes:
 
 ---
 
+### Bug 0.6: Interface UUID must not be byte-swapped (BLOCKING — SILENT DROP)
+
+**File**: `src/profinet/profinet_rpc.c` (two locations where Interface UUID is written)
+
+**Root cause**: When the 48-strategy system was retired (Bug 0.4), `uuid_swap_fields()`
+was applied to ALL three RPC header UUIDs: Object, Interface, and Activity. But the
+Interface UUID constants (`PNIO_DEVICE_INTERFACE_UUID`, `PNIO_CONTROLLER_INTERFACE_UUID`)
+must NOT be swapped. They are protocol constants stored in canonical byte order — the
+same byte order p-net uses internally.
+
+**Why it fails**: p-net parses the Interface UUID from the wire using DREP-aware functions
+(`pf_get_uuid()` at `pf_block_reader.c:922`, which uses `pf_get_uint32()`/`pf_get_uint16()`
+respecting `is_big_endian` from `pf_block_reader.c:910`). This converts wire bytes back
+to host-order `pf_uuid_t` values. Then at `pf_cmrpc.c:4690`, a raw `memcmp` compares the
+parsed UUID against the constant:
+
+```c
+4690    if (
+4691       memcmp (
+4692          &rpc_req.interface_uuid,
+4693          &uuid_io_device_interface,      /* {0xDEA00001, 0x6C97, 0x11D1, ...} */
+4694          sizeof (rpc_req.object_uuid)) == 0)
+```
+
+If `uuid_swap_fields()` byte-swaps data1/data2/data3 before LE serialization, the wire
+gets BE-ordered bytes. p-net's LE parser then converts those back to the swapped form
+(`{0x0100A0DE, 0x976C, 0xD111, ...}`). The `memcmp` fails — the UUID is not recognized
+as PNIO or EPM.
+
+**Why it's silent**: When neither PNIO nor EPM UUID matches, p-net falls through to
+`pf_cmrpc.c:4749-4756`:
+
+```c
+4749    else
+4750    {
+4751       LOG_ERROR (PF_RPC_LOG,
+4752          "CMRPC(%d): Unhandled Object or Interface UUID!\n", __LINE__);
+4753       /*ToDo: Report NULL endpoint with proper error code*/
+4754    }
+```
+
+No response body is generated. The controller gets nothing back — no error, no reject,
+just silence. This made the bug invisible during strategy cycling because the system
+already expected most strategies to fail.
+
+**Fix**: Remove `uuid_swap_fields()` from the two locations where Interface UUID
+constants are written. Object UUID and Activity UUID (session-specific, generated at
+runtime in host order) still need the swap for LE wire encoding. Interface UUID constants
+do not.
+
+```c
+/* Object UUID — swap for LE wire encoding (session-specific) */
+uuid_swap_fields(&object_uuid);
+write_uuid(buffer, &object_uuid, &pos);
+
+/* Interface UUID — DO NOT swap (protocol constant, matches p-net's internal form) */
+write_uuid(buffer, &PNIO_DEVICE_INTERFACE_UUID, &pos);
+
+/* Activity UUID — swap for LE wire encoding (session-specific) */
+uuid_swap_fields(&activity_uuid);
+write_uuid(buffer, &activity_uuid, &pos);
+```
+
+**Verification**: After fix, p-net must respond (not silence). Even an error response
+with `frag_len >= 20` confirms the Interface UUID matched.
+
+---
+
+### Phase 0 Completion Summary
+
+All six controller-side bugs have been identified and fixed. Seven additional
+issues were found and fixed on the RTU side (Water-treat repo):
+
+| # | RTU Fix | Detail |
+|---|---------|--------|
+| 1 | Record Read 0xF844 not implemented | Built `profinet_manager_build_slot_map()` returning BE-packed binary (2-byte header + 15 bytes/slot). Full step 5 of discovery chain now operational. |
+| 2 | Write callback silent success on unknown vendor indices | Unknown indices >0x7FFF now return PNIO error 0xDE/0x80 instead of silently succeeding. |
+| 3 | `slots_to_json` slot_count mismatch | `slot_count` now reflects actual emitted entries if buffer truncation occurs, with warning log. |
+| 4 | `serve_gsdml_file` fire-and-forget send | Proper partial-send loop with `MSG_NOSIGNAL`, error logging, and clean fd/fp cleanup on failure. |
+| 5 | Config sync not forwarded in stub mode | 0xF841-0xF843 now forwarded in `!HAVE_PNET` builds, matching `user_sync` and enrollment forwarding. |
+| 6 | Build broken — missing `user_sync_protocol.h` | Fetched from Water-Controller repo via `scripts/fetch_shared_protocols.sh`. |
+| 7 | Test build broken | Added `tests/test_stubs.c` for TUI stubs, fixed `test_framework.h` unused variable warnings. |
+
+---
+
 ## Phase 1: DAP-Only Connect
 
 After fixing Phase 0 bugs, test with the simplest possible connect request:
@@ -580,13 +665,15 @@ station name from DCP Identify Response, it does not write one.
 After each phase, verify with a packet capture:
 
 ### Phase 0 verification
-- [ ] ARBlockReq block_length = 54 + station_name_len (no padding)
-- [ ] Wire bytes for block_length: `00 3E` for 8-char name
-- [ ] AlarmCRBlockReq tag_header_high = `C0 00`, tag_header_low = `A0 00`
-- [ ] NDR header present (20 bytes between RPC header and first block)
-- [ ] RPC `frag_len` matches actual payload (in LE)
-- [ ] RPC `if_version` = `01 00 00 00` (LE for value 1)
-- [ ] RPC `seqnum` increments by 1 in LE
+- [x] ARBlockReq block_length = 54 + station_name_len (no padding)
+- [x] Wire bytes for block_length: `00 3E` for 8-char name
+- [x] AlarmCRBlockReq tag_header_high = `C0 00`, tag_header_low = `A0 00`
+- [x] NDR header present (20 bytes between RPC header and first block)
+- [x] RPC `frag_len` matches actual payload (in LE)
+- [x] RPC `if_version` = `01 00 00 00` (LE for value 1)
+- [x] RPC `seqnum` increments by 1 in LE
+- [x] Interface UUID NOT byte-swapped — p-net responds (not silence)
+- [x] Strategy system retired — single correct wire format only
 
 ### Phase 1 verification
 - [ ] RTU responds with FragLen > 20

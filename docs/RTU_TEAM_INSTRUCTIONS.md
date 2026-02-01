@@ -13,6 +13,18 @@ handles connection acceptance, block parsing, and validation correctly.
 The database-driven slot system works as designed. The primary connection
 failures originate from the controller's wire encoding (documented separately).
 
+Seven issues were found and fixed on the RTU side during Phase 0:
+
+| # | Issue | Fix |
+|---|-------|-----|
+| 1 | Record Read 0xF844 not implemented | Built `profinet_manager_build_slot_map()` returning BE-packed binary (2-byte header + 15 bytes/slot). Full step 5 of discovery chain now operational. |
+| 2 | Write callback silent success on unknown vendor indices | Unknown indices >0x7FFF now return PNIO error 0xDE/0x80 instead of silently succeeding. |
+| 3 | `slots_to_json` slot_count mismatch | `slot_count` now reflects actual emitted entries if buffer truncation occurs, with warning log. |
+| 4 | `serve_gsdml_file` fire-and-forget send | Proper partial-send loop with `MSG_NOSIGNAL`, error logging, and clean fd/fp cleanup on failure. |
+| 5 | Config sync not forwarded in stub mode | 0xF841-0xF843 now forwarded in `!HAVE_PNET` builds, matching `user_sync` and enrollment forwarding. |
+| 6 | Build broken — missing `user_sync_protocol.h` | Fetched from Water-Controller repo via `scripts/fetch_shared_protocols.sh`. |
+| 7 | Test build broken | Added `tests/test_stubs.c` for TUI stubs, fixed `test_framework.h` unused variable warnings. |
+
 This document covers:
 1. Items the RTU team must verify/maintain for connection success
 2. The `/api/v1/slots` HTTP endpoint (fallback mechanism, lowest priority)
