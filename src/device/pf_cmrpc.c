@@ -1987,6 +1987,24 @@ static int pf_cmrpc_rm_connect_ind (
    pf_ar_t * p_ar = NULL;
    pf_ar_t * p_ar_2 = NULL; /* When looking for duplicate */
 
+   /* Validate source IP - reject requests from 0.0.0.0 (invalid) */
+   if (p_sess->ip_addr == 0)
+   {
+      LOG_ERROR (
+         PF_RPC_LOG,
+         "CMRPC(%d): Rejecting Connect request from invalid source IP 0.0.0.0. "
+         "Controller must be configured with a valid IP address. "
+         "Check CMInitiatorIPAddress in the ARBlockReq.\n",
+         __LINE__);
+      pf_set_error (
+         &p_sess->rpc_result,
+         PNET_ERROR_CODE_CONNECT,
+         PNET_ERROR_DECODE_PNIO,
+         PNET_ERROR_CODE_1_CMRPC,
+         PNET_ERROR_CODE_2_CMRPC_INVALID_PARAM);
+      return -1;
+   }
+
    if (p_sess->rpc_result.pnio_status.error_code != PNET_ERROR_CODE_NOERROR)
    {
       LOG_ERROR (PF_RPC_LOG, "CMRPC(%d): RPC request has error\n", __LINE__);
